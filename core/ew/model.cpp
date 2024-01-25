@@ -15,7 +15,7 @@ namespace ew {
 	Model::Model(const std::string& filePath)
 	{
 		Assimp::Importer importer;
-		const aiScene* aiScene = importer.ReadFile(filePath, aiProcess_Triangulate);
+		const aiScene* aiScene = importer.ReadFile(filePath, aiProcess_Triangulate | aiProcess_CalcTangentSpace);
 		for (size_t i = 0; i < aiScene->mNumMeshes; i++)
 		{
 			aiMesh* aiMesh = aiScene->mMeshes[i];
@@ -47,6 +47,9 @@ namespace ew {
 			}
 			if (aiMesh->HasTextureCoords(0)) {
 				vertex.uv = glm::vec2(convertAIVec3(aiMesh->mTextureCoords[0][i]));
+			}
+			if (aiMesh->HasTangentsAndBitangents()) {
+				vertex.tangent = convertAIVec3(aiMesh->mTangents[i]);
 			}
 			meshData.vertices.push_back(vertex);
 		}
