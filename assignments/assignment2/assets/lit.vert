@@ -13,7 +13,11 @@ out Surface{
 	//vec3 WorldNormal; //Vertex normal in world space
 	vec2 TexCoord;
 	mat3 TBN;
+	vec4 LightSpacePos; //Clip space position in light space
 }vs_out;
+
+
+uniform mat4 _LightTransform;
 
 void main(){
 	//Transform vertex position to World Space.
@@ -22,4 +26,6 @@ void main(){
 	vs_out.TexCoord = vTexCoord;
 	vs_out.TBN =  transpose(inverse(mat3(_Model))) * mat3(vTangent,cross(vNormal,vTangent),vNormal);
 	gl_Position = _ViewProjection * _Model * vec4(vPos,1.0);
+
+	vs_out.LightSpacePos = _LightTransform * vec4(vs_out.WorldPos,1.0);
 }

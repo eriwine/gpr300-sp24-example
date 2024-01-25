@@ -50,22 +50,8 @@ GLuint stoneColorTexture;
 GLuint stoneNormalTexture;
 
 void drawScene(ew::Camera& camera, ew::Shader& shader) {
-	glBindTextureUnit(0, stoneColorTexture);
-	glBindTextureUnit(1, stoneNormalTexture);
-
 	shader.use();
-	shader.setInt("_MainTex", 0);
-	shader.setInt("_NormalMap", 1);
-
-	shader.setFloat("_Material.Ka", material.Ka);
-	shader.setFloat("_Material.Kd", material.Kd);
-	shader.setFloat("_Material.Ks", material.Ks);
-	shader.setFloat("_Material.Shininess", material.Shininess);
-
-	shader.setVec3("_EyePos", camera.position);
-	shader.setVec3("_MainLight.color", mainLight.color);
-	shader.setVec3("_MainLight.direction", mainLight.direction);
-
+	
 	shader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
 	shader.setMat4("_Model", monkeyTransform.modelMatrix());
 	monkeyModel.draw();
@@ -106,8 +92,6 @@ int main() {
 
 	ew::Camera shadowCamera;
 	shadowCamera.aspectRatio = 1;
-	shadowCamera.target = glm::vec3(0);
-	shadowCamera.position = normalize(-mainLight.direction) * 3.0f;
 	shadowCamera.farPlane = 50;
 	shadowCamera.nearPlane = 1.0;
 	shadowCamera.orthoHeight = 10.0;
@@ -134,6 +118,9 @@ int main() {
 		glViewport(0, 0, shadowFBO.width, shadowFBO.height);
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_DEPTH_BUFFER_BIT);
+		shadowCamera.target = glm::vec3(0);
+		shadowCamera.position = normalize(-mainLight.direction) * 3.0f;
+		glCullFace(GL_FRONT);
 		drawScene(shadowCamera,depthOnlyShader);
 
 		//RENDER SCENE TO HDR BUFFER
@@ -141,6 +128,26 @@ int main() {
 		glViewport(0, 0, framebuffer.width, framebuffer.height);
 		glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glCullFace(GL_BACK);
+		//Bind textures
+		glBindTextureUnit(0, stoneColorTexture);
+		glBindTextureUnit(1, stoneNormalTexture);
+		glBindTextureUnit(2, shadowFBO.depthBuffer);
+
+		litShader.use();
+		litShader.setInt("_MainTex", 0);
+		litShader.setInt("_NormalMap", 1);
+		litShader.setInt("_ShadowMap", 2);
+		litShader.setFloat("_Material.Ka", material.Ka);
+		litShader.setFloat("_Material.Kd", material.Kd);
+		litShader.setFloat("_Material.Ks", material.Ks);
+		litShader.setFloat("_Material.Shininess", material.Shininess);
+		litShader.setVec3("_EyePos", mainCamera.position);
+		litShader.setVec3("_MainLight.color", mainLight.color);
+		litShader.setVec3("_MainLight.direction", mainLight.direction);
+
+		litShader.setMat4("_LightTransform", shadowCamera.projectionMatrix() * shadowCamera.viewMatrix());
+
 		drawScene(mainCamera,litShader);
 
 		//Draw to screen
