@@ -32,6 +32,7 @@ namespace ew {
 			vertex.pos = pos;
 			vertex.normal = normal;
 			vertex.uv = glm::vec2(col, row);
+			vertex.tangent = a;
 			mesh->vertices.push_back(vertex);
 		}
 
@@ -76,6 +77,7 @@ namespace ew {
 				v.pos.y = 0;
 				v.pos.z = height/2 -height * v.uv.y;
 				v.normal = vec3(0, 1, 0);
+				v.tangent = vec3(1, 0, 0);
 				mesh.vertices.push_back(v);
 			}
 		}
@@ -114,6 +116,7 @@ namespace ew {
 				v.pos = v.normal * radius;
 				v.uv.x = (float)col / subdivisions;
 				v.uv.y = 1.0 - ((float)row / subdivisions);
+				v.tangent = cross(v.normal, vec3(0, 1, 0));
 				mesh.vertices.push_back(v);
 			}
 		}

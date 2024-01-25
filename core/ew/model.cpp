@@ -11,7 +11,9 @@
 
 namespace ew {
 	ew::Mesh processAiMesh(aiMesh* aiMesh);
+	Model::Model() {
 
+	}
 	Model::Model(const std::string& filePath)
 	{
 		Assimp::Importer importer;

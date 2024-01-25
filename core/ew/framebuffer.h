@@ -8,4 +8,5 @@ namespace ew {
 		unsigned int height;
 	};
 	Framebuffer createFramebuffer(unsigned int width, unsigned int height);
+	Framebuffer createDepthOnlyFramebuffer(unsigned int width, unsigned int height);
 }

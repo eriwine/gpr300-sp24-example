@@ -10,6 +10,7 @@
 namespace ew {
 	class Model {
 	public:
+		Model();
 		Model(const std::string& filePath);
 		void draw();
 	private:
