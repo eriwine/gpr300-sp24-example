@@ -6,6 +6,18 @@
 #include "external/glad.h"
 #include "external/stb_image.h"
 
+static int getInternalTextureFormat(int numComponents, bool srgb) {
+	switch (numComponents) {
+	default:
+		return srgb ? GL_SRGB_ALPHA : GL_RGBA;
+	case 3:
+		return srgb ? GL_SRGB : GL_RGB;
+	case 2:
+		return GL_RG;
+	case 1:
+		return GL_RED;
+	}
+}
 static int getTextureFormat(int numComponents) {
 	switch (numComponents) {
 	default:
@@ -20,9 +32,12 @@ static int getTextureFormat(int numComponents) {
 }
 namespace ew {
 	unsigned int loadTexture(const char* filePath) {
-		return loadTexture(filePath, GL_REPEAT, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, true);
+		return loadTexture(filePath, GL_REPEAT, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, true, false);
 	}
-	unsigned int loadTexture(const char* filePath, int wrapMode, int magFilter, int minFilter, bool mipmap) {
+	unsigned int loadTexture(const char* filePath, bool sRGB) {
+		return loadTexture(filePath, GL_REPEAT, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, true, sRGB);
+	}
+	unsigned int loadTexture(const char* filePath, int wrapMode, int magFilter, int minFilter, bool mipmap, bool sRGB) {
 		stbi_set_flip_vertically_on_load(true);
 		int width, height, numComponents;
 		unsigned char* data = stbi_load(filePath, &width, &height, &numComponents, 0);
@@ -34,8 +49,9 @@ namespace ew {
 		unsigned int texture;
 		glGenTextures(1, &texture);
 		glBindTexture(GL_TEXTURE_2D, texture);
+		int internalFormat = getInternalTextureFormat(numComponents, sRGB);
 		int format = getTextureFormat(numComponents);
-		glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+		glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, GL_UNSIGNED_BYTE, data);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
