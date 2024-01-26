@@ -27,8 +27,11 @@ struct Light{
 uniform Light _MainLight;
 
 uniform sampler2D _ShadowMap;
+uniform float _MinBias = 0.005; 
+uniform float _MaxBias = 0.015;
 
-float calcShadow(){
+//Returns 0 in shadow, 1 out of shadow
+float calcShadow(vec3 normal, vec3 toLight){
 	vec3 lightSpacePos = fs_in.LightSpacePos.xyz / fs_in.LightSpacePos.w;
 
 	//[-1,1] to [0,1]
@@ -37,11 +40,21 @@ float calcShadow(){
 	//This fragment's depth from POV of the light source
 	float myDepth = lightSpacePos.z;
 
-	//Bias
-	myDepth-=0.01;
+	//Slope scale bias
+	float bias = max(_MaxBias * (1.0 - dot(normal,toLight)),_MinBias);
+	myDepth -= bias;
 
-	float shadowMapDepth = texture(_ShadowMap,lightSpacePos.xy).r;
-	return step(myDepth,shadowMapDepth);
+	//PCF
+	float totalShadow = 0;
+	vec2 texelOffset = 1.0 /  textureSize(_ShadowMap,0);
+	for(int y = -1; y <=1; y++){
+		for(int x = -1; x <=1; x++){
+			vec2 uv = lightSpacePos.xy + vec2(x * texelOffset.x, y * texelOffset.y);
+			totalShadow+=step(myDepth,texture(_ShadowMap,uv).r);
+		}
+	}
+	totalShadow/=9.0;
+	return totalShadow;
 }
 
 void main(){
@@ -61,7 +74,7 @@ void main(){
 	//Combination of specular and diffuse reflection
 	vec3 lightColor = (_Material.Kd * diffuseFactor + _Material.Ks * specularFactor) * _MainLight.color;
 
-	lightColor*=calcShadow();
+	lightColor*=calcShadow(normal,toLight);
 
 	lightColor+=_AmbientColor * _Material.Ka;
 	vec3 objectColor = texture(_MainTex,fs_in.TexCoord).rgb;

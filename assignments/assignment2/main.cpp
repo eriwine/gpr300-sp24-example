@@ -49,6 +49,11 @@ ew::Transform planeTransform;
 GLuint stoneColorTexture;
 GLuint stoneNormalTexture;
 
+struct MeshRenderer {
+	ew::Mesh mesh;
+	ew::Transform transform;
+};
+
 void drawScene(ew::Camera& camera, ew::Shader& shader) {
 	shader.use();
 	
@@ -81,14 +86,11 @@ int main() {
 	glCullFace(GL_BACK); //Back face culling
 	glEnable(GL_DEPTH_TEST); //Depth testing
 
-
+	//Initialize cameras
 	mainCamera.position = glm::vec3(0.0f, 0.0f, 5.0f);
 	mainCamera.target = glm::vec3(0.0f, 0.0f, 0.0f); //Look at the center of the scene
 	mainCamera.aspectRatio = (float)screenWidth / screenHeight;
 	mainCamera.fov = 60.0f; //Vertical field of view, in degrees
-
-	ew::Framebuffer framebuffer = ew::createFramebuffer(screenWidth, screenHeight);
-	ew::Framebuffer shadowFBO = ew::createDepthOnlyFramebuffer(512, 512);
 
 	ew::Camera shadowCamera;
 	shadowCamera.aspectRatio = 1;
@@ -96,6 +98,10 @@ int main() {
 	shadowCamera.nearPlane = 1.0;
 	shadowCamera.orthoHeight = 10.0;
 	shadowCamera.orthographic = true;
+
+	//Initialize framebuffers
+	ew::Framebuffer framebuffer = ew::createFramebuffer(screenWidth, screenHeight);
+	ew::Framebuffer shadowFBO = ew::createDepthOnlyFramebuffer(512, 512);
 
 	//Used for supplying indices to vertex shaders
 	unsigned int dummyVAO;
