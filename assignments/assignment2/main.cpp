@@ -23,6 +23,7 @@ void drawUI();
 ew::CameraController cameraController;
 ew::Camera mainCamera;
 
+
 //Global state
 int screenWidth = 1080;
 int screenHeight = 720;
@@ -42,25 +43,39 @@ struct Light {
 
 bool postProcessEnabled;
 
-ew::Model monkeyModel;
-ew::Mesh planeMesh;
 ew::Transform monkeyTransform;
 ew::Transform planeTransform;
+
+//Assets
+ew::Model monkeyModel;
+ew::Mesh planeMesh;
 GLuint stoneColorTexture;
 GLuint stoneNormalTexture;
+GLuint goldColorTexture;
+GLuint goldNormalTexture;
 
-struct MeshRenderer {
-	ew::Mesh mesh;
-	ew::Transform transform;
-};
+ew::Framebuffer framebuffer;
+
+//Shadows
+ew::Framebuffer shadowFBO;
+ew::Camera shadowCamera;
+struct ShadowSettings {
+	float camDistance = 10.0f;
+	float minBias = 0.005f;
+	float maxBias = 0.01f;
+}shadowSettings;
 
 void drawScene(ew::Camera& camera, ew::Shader& shader) {
 	shader.use();
-	
 	shader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
+
+	glBindTextureUnit(0, goldColorTexture);
+	glBindTextureUnit(1, goldNormalTexture);
 	shader.setMat4("_Model", monkeyTransform.modelMatrix());
 	monkeyModel.draw();
 
+	glBindTextureUnit(0, stoneColorTexture);
+	glBindTextureUnit(1, stoneNormalTexture);
 	shader.setMat4("_Model", planeTransform.modelMatrix());
 	planeMesh.draw();
 }
@@ -69,8 +84,10 @@ int main() {
 	GLFWwindow* window = initWindow("Assignment 0", screenWidth, screenHeight);
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
-	stoneColorTexture = ew::loadTexture("assets/stones_color.png",true);
-	stoneNormalTexture = ew::loadTexture("assets/stones_normal.png");
+	stoneColorTexture = ew::loadTexture("assets/textures/stones_color.png",true);
+	stoneNormalTexture = ew::loadTexture("assets/textures/stones_normal.png");
+	goldColorTexture = ew::loadTexture("assets/textures/gold_color.png", true);
+	goldNormalTexture = ew::loadTexture("assets/textures/gold_normal.png");
 
 	ew::Shader litShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
 	ew::Shader depthOnlyShader = ew::Shader("assets/depthOnly.vert", "assets/depthOnly.frag");
@@ -92,16 +109,15 @@ int main() {
 	mainCamera.aspectRatio = (float)screenWidth / screenHeight;
 	mainCamera.fov = 60.0f; //Vertical field of view, in degrees
 
-	ew::Camera shadowCamera;
 	shadowCamera.aspectRatio = 1;
 	shadowCamera.farPlane = 50;
 	shadowCamera.nearPlane = 1.0;
-	shadowCamera.orthoHeight = 10.0;
+	shadowCamera.orthoHeight = 10.0f;
 	shadowCamera.orthographic = true;
 
 	//Initialize framebuffers
-	ew::Framebuffer framebuffer = ew::createFramebuffer(screenWidth, screenHeight);
-	ew::Framebuffer shadowFBO = ew::createDepthOnlyFramebuffer(512, 512);
+	framebuffer = ew::createFramebuffer(screenWidth, screenHeight);
+	shadowFBO = ew::createDepthOnlyFramebuffer(512, 512);
 
 	//Used for supplying indices to vertex shaders
 	unsigned int dummyVAO;
@@ -125,7 +141,7 @@ int main() {
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_DEPTH_BUFFER_BIT);
 		shadowCamera.target = glm::vec3(0);
-		shadowCamera.position = normalize(-mainLight.direction) * 3.0f;
+		shadowCamera.position = normalize(-mainLight.direction) * shadowSettings.camDistance;
 		glCullFace(GL_FRONT);
 		drawScene(shadowCamera,depthOnlyShader);
 
@@ -136,8 +152,6 @@ int main() {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glCullFace(GL_BACK);
 		//Bind textures
-		glBindTextureUnit(0, stoneColorTexture);
-		glBindTextureUnit(1, stoneNormalTexture);
 		glBindTextureUnit(2, shadowFBO.depthBuffer);
 
 		litShader.use();
@@ -151,7 +165,8 @@ int main() {
 		litShader.setVec3("_EyePos", mainCamera.position);
 		litShader.setVec3("_MainLight.color", mainLight.color);
 		litShader.setVec3("_MainLight.direction", mainLight.direction);
-
+		litShader.setFloat("_MinBias", shadowSettings.minBias);
+		litShader.setFloat("_MaxBias", shadowSettings.maxBias);
 		litShader.setMat4("_LightTransform", shadowCamera.projectionMatrix() * shadowCamera.viewMatrix());
 
 		drawScene(mainCamera,litShader);
@@ -185,19 +200,38 @@ void drawUI() {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui::NewFrame();
 
-	ImGui::Begin("Settings");
-	if (ImGui::Button("Reset Camera")) {
-		resetCamera(&mainCamera, &cameraController);
+	ImGui::Begin("Settings"); {
+		if (ImGui::Button("Reset Camera")) {
+			resetCamera(&mainCamera, &cameraController);
+		}
+		if (ImGui::CollapsingHeader("Material")) {
+			ImGui::SliderFloat("AmbientK", &material.Ka, 0.0f, 1.0f);
+			ImGui::SliderFloat("DiffuseK", &material.Kd, 0.0f, 1.0f);
+			ImGui::SliderFloat("SpecularK", &material.Ks, 0.0f, 1.0f);
+			ImGui::SliderFloat("Shininess", &material.Shininess, 2.0f, 1024.0f);
+		}
+		if (ImGui::CollapsingHeader("Light")) {
+			ImGui::ColorEdit3("Color", &mainLight.color.r);
+			ImGui::SliderFloat3("Direction", &mainLight.direction.x, -1.0f, 1.0f);
+		}
+		if (ImGui::CollapsingHeader("Shadows")) {
+			ImGui::DragFloat("Shadow cam distance", &shadowSettings.camDistance);
+			ImGui::DragFloat("Shadow cam size", &shadowCamera.orthoHeight);
+			ImGui::DragFloat("Shadow min bias", &shadowSettings.minBias);
+			ImGui::DragFloat("Shadow max bias", &shadowSettings.maxBias);
+		}
 	}
-	if (ImGui::CollapsingHeader("Material")) {
-		ImGui::SliderFloat("AmbientK", &material.Ka, 0.0f, 1.0f);
-		ImGui::SliderFloat("DiffuseK", &material.Kd, 0.0f, 1.0f);
-		ImGui::SliderFloat("SpecularK", &material.Ks, 0.0f, 1.0f);
-		ImGui::SliderFloat("Shininess", &material.Shininess, 2.0f, 1024.0f);
-	}
-	if (ImGui::CollapsingHeader("Light")) {
-		ImGui::ColorEdit3("Color", &mainLight.color.r);
-		ImGui::SliderFloat3("Direction", &mainLight.direction.x, -1.0f, 1.0f);
+	ImGui::End();
+
+	ImGui::Begin("Shadow Map"); {
+		//Using a Child allow to fill all the space of the window.
+		ImGui::BeginChild("ShadowMap");
+		//Stretch image to be window size
+		ImVec2 windowSize = ImGui::GetWindowSize();
+		//Invert 0-1 V to flip vertically. ImGui::Image expects V = 0 to be on top.
+		ImGui::Image((ImTextureID)shadowFBO.depthBuffer, windowSize, ImVec2(0, 1), ImVec2(1, 0));
+		ImGui::EndChild();
+
 	}
 	ImGui::End();
 
