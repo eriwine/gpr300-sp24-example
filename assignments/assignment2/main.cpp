@@ -177,7 +177,7 @@ int main() {
 		glClearColor(0, 0, 0, 0);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		glBindTextureUnit(0, framebuffer.colorBuffer);
+		glBindTextureUnit(0, framebuffer.colorBuffers[0]);
 		//glBindTextureUnit(0, shadowFBO.depthBuffer);
 		postProcessShader.use();
 		glBindVertexArray(dummyVAO);
