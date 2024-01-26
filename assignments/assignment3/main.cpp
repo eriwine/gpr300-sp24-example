@@ -65,6 +65,7 @@ GLuint goldNormalTexture;
 
 ew::Framebuffer gBuffer;
 ew::Framebuffer framebuffer;
+ew::Framebuffer lightVolumeBuffer;
 
 //Shadows
 ew::Framebuffer shadowFBO;
@@ -105,10 +106,12 @@ int main() {
 	ew::Shader gBufferShader = ew::Shader("assets/gBufferPass.vert", "assets/gBufferPass.frag");
 	ew::Shader deferredShader = ew::Shader("assets/fsTriangle.vert", "assets/deferredShading.frag");
 	ew::Shader emissiveShader = ew::Shader("assets/emissive.vert", "assets/emissive.frag");
+	ew::Shader deferredLightVolume = ew::Shader("assets/deferredLightVolume.vert", "assets/deferredLightVolume.frag");
+
 	//Load models
 	monkeyModel = ew::Model("assets/Suzanne.obj");
 	planeMesh = ew::Mesh(ew::createPlane(10, 10, 1));
-	sphereMesh = ew::Mesh(ew::createSphere(0.5f, 32));
+	sphereMesh = ew::Mesh(ew::createSphere(1.0f, 32));
 	planeTransform.position.y = -2;
 
 	glEnable(GL_CULL_FACE);
@@ -129,6 +132,7 @@ int main() {
 
 	//Initialize framebuffers
 	framebuffer = ew::createFramebuffer(screenWidth, screenHeight);
+	lightVolumeBuffer = ew::createFramebuffer(screenWidth, screenHeight);
 	shadowFBO = ew::createDepthOnlyFramebuffer(512, 512);
 	gBuffer = ew::createGBuffers(screenWidth, screenHeight);
 
@@ -162,6 +166,7 @@ int main() {
 			pointLights[i].position = glm::vec3(cosf(theta)* orbitRadius, 1, sin(theta) * orbitRadius);
 		}
 
+		glDisable(GL_BLEND);
 		//RENDER SHADOW MAP
 		glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO.fbo);
 		glViewport(0, 0, shadowFBO.width, shadowFBO.height);
@@ -180,12 +185,52 @@ int main() {
 		glCullFace(GL_BACK);
 		drawScene(mainCamera, gBufferShader);
 
+		//Render light volumes to light buffer
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, lightVolumeBuffer.fbo);
+			glViewport(0, 0, lightVolumeBuffer.width, lightVolumeBuffer.height);
+			glClearColor(0, 0, 0, 1.0);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+			//Bind textures
+			glBindTextureUnit(0, gBuffer.colorBuffers[0]);
+			glBindTextureUnit(1, gBuffer.colorBuffers[1]);
+			glBindTextureUnit(2, gBuffer.colorBuffers[2]);
+
+			deferredLightVolume.use();
+			deferredLightVolume.setMat4("_ViewProjection", mainCamera.projectionMatrix() * mainCamera.viewMatrix());
+			deferredLightVolume.setFloat("_Material.Ka", material.Ka);
+			deferredLightVolume.setFloat("_Material.Kd", material.Kd);
+			deferredLightVolume.setFloat("_Material.Ks", material.Ks);
+			deferredLightVolume.setFloat("_Material.Shininess", material.Shininess);
+			deferredLightVolume.setVec3("_EyePos", mainCamera.position);
+			deferredLightVolume.setVec2("_ScreenSize", lightVolumeBuffer.width, lightVolumeBuffer.height);
+			//Additive blending
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_ONE, GL_ONE);
+
+			for (size_t i = 0; i < numPointLights; i++)
+			{
+				deferredLightVolume.setVec3("_PointLight.position", pointLights[i].position);
+				deferredLightVolume.setVec3("_PointLight.color", pointLights[i].color);
+				deferredLightVolume.setFloat("_PointLight.radius", pointLights[i].radius);
+
+				glm::mat4 m = glm::mat4(1.0f);
+				m = glm::scale(m, glm::vec3(pointLights[i].radius));
+				m = glm::translate(m, pointLights[i].position);
+				deferredLightVolume.setMat4("_Model", m);
+				sphereMesh.draw();
+			}
+		}
+
+		glDisable(GL_BLEND);
+
 		//Deferred shading
 		//Lighting done in screenspace
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
 			glViewport(0, 0, framebuffer.width, framebuffer.height);
-			glClearColor(0, 0, 0, 0);
+			glClearColor(0, 0, 0, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 			//Bind textures
@@ -206,7 +251,7 @@ int main() {
 			deferredShader.setFloat("_MaxBias", shadowSettings.maxBias);
 			deferredShader.setMat4("_LightTransform", shadowCamera.projectionMatrix() * shadowCamera.viewMatrix());
 
-			for (size_t i = 0; i < MAX_POINT_LIGHTS; i++)
+			for (size_t i = 0; i < numPointLights; i++)
 			{
 				std::string uniformPrefix = "_PointLights[" + std::to_string(i) + "].";
 				deferredShader.setVec3(uniformPrefix + "position", pointLights[i].position);
@@ -243,7 +288,7 @@ int main() {
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			glViewport(0, 0, screenWidth, screenHeight);
-			glClearColor(0, 0, 0, 0);
+			glClearColor(0, 0, 0, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 			glBindTextureUnit(0, framebuffer.colorBuffers[0]);
@@ -300,6 +345,7 @@ void drawUI() {
 			ImGui::Image((ImTextureID)gBuffer.colorBuffers[i], ImVec2(gBuffer.width/4, gBuffer.height/4), ImVec2(0, 1), ImVec2(1, 0));
 		}
 		ImGui::Image((ImTextureID)shadowFBO.depthBuffer, ImVec2(gBuffer.width / 4, gBuffer.height / 4), ImVec2(0, 1), ImVec2(1, 0));
+		ImGui::Image((ImTextureID)lightVolumeBuffer.colorBuffers[0], ImVec2(gBuffer.width / 4, gBuffer.height / 4), ImVec2(0, 1), ImVec2(1, 0));
 	}
 	ImGui::End();
 

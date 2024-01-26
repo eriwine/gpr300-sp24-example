@@ -42,8 +42,6 @@ struct PointLight{
 uniform PointLight _PointLights[MAX_POINT_LIGHTS];
 uniform int _NumPointLights = MAX_POINT_LIGHTS;
 
-uniform vec3 _EmissiveColor = vec3(0);
-
 vec3 calcPointLight(PointLight light, vec3 worldPos, vec3 normal){
 	vec3 toLight = normalize(light.position - worldPos);
 	float diffuseFactor = max(dot(normal,toLight),0.0);
@@ -113,10 +111,10 @@ void main(){
 
 	lightColor+=_AmbientColor * _Material.Ka;
 
-	//Add all point lights
-	for(int i = 0; i < _NumPointLights; i++){
-		lightColor+=calcPointLight(_PointLights[i],worldPos,normal);
-	}
-
-	FragColor = vec4(albedo * lightColor + _EmissiveColor,1.0);
+//	//Add all point lights
+//	for(int i = 0; i < _NumPointLights; i++){
+//		lightColor+=calcPointLight(_PointLights[i],worldPos,normal);
+//	}
+//
+	FragColor = vec4(albedo * lightColor,1.0);
 }
