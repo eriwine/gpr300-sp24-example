@@ -36,15 +36,16 @@ struct Material {
 }material;
 
 struct Light {
-	glm::vec3 direction = glm::vec3(-0.77f, -0.77f, 0);
+	glm::vec3 direction = glm::vec3(0, -1.0f, 0);
 	glm::vec3 color = glm::vec3(1.0f);
 }mainLight;
 
 
 //Global setting
-float pointLightRadius = 7.5f;
+float pointLightRadius = 5.0f;
+float orbitRadius = 8.0f;
 
-const int MAX_POINT_LIGHTS = 64;
+const int MAX_POINT_LIGHTS = 1024;
 struct PointLight {
 	glm::vec3 position = glm::vec3(0);
 	float radius = pointLightRadius;
@@ -55,7 +56,8 @@ int numPointLights = MAX_POINT_LIGHTS;
 
 bool postProcessEnabled;
 
-ew::Transform monkeyTransform;
+const int MONKEY_COUNT = 64;
+ew::Transform monkeyTransforms[MONKEY_COUNT];
 ew::Transform planeTransform;
 
 //Assets
@@ -87,14 +89,23 @@ void drawScene(ew::Camera& camera, ew::Shader& shader) {
 	glBindTextureUnit(0, stoneColorTexture);
 	glBindTextureUnit(1, stoneNormalTexture);
 	shader.setMat4("_Model", planeTransform.modelMatrix());
+	shader.setVec2("_Tiling", glm::vec2(8.0f));
 	planeMesh.draw();
 
 	glBindTextureUnit(0, goldColorTexture);
 	glBindTextureUnit(1, goldNormalTexture);
-	shader.setMat4("_Model", monkeyTransform.modelMatrix());
-	monkeyModel.draw();
+	shader.setVec2("_Tiling", glm::vec2(1.0f));
+	for (size_t i = 0; i < MONKEY_COUNT; i++)
+	{
+		shader.setMat4("_Model", monkeyTransforms[i].modelMatrix());
+		monkeyModel.draw();
+	}
+	
 }
 
+float randomFloat() {
+	return static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+}
 int main() {
 	GLFWwindow* window = initWindow("Assignment 0", screenWidth, screenHeight);
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
@@ -114,9 +125,9 @@ int main() {
 
 	//Load models
 	monkeyModel = ew::Model("assets/Suzanne.obj");
-	planeMesh = ew::Mesh(ew::createPlane(10, 10, 1));
+	planeMesh = ew::Mesh(ew::createPlane(40, 40, 1));
 	sphereMesh = ew::Mesh(ew::createSphere(1.0f, 16));
-	planeTransform.position.y = -2;
+	planeTransform.position.y = -1.25;
 
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK); //Back face culling
@@ -131,8 +142,9 @@ int main() {
 	shadowCamera.aspectRatio = 1;
 	shadowCamera.farPlane = 50;
 	shadowCamera.nearPlane = 1.0;
-	shadowCamera.orthoHeight = 10.0f;
+	shadowCamera.orthoHeight = 20.0f;
 	shadowCamera.orthographic = true;
+	shadowCamera.target = glm::vec3(20, 0, 20);
 
 	//Initialize framebuffers
 	framebuffer = ew::createFramebuffer(screenWidth, screenHeight, GL_RGBA16F);
@@ -144,11 +156,19 @@ int main() {
 	unsigned int dummyVAO;
 	glCreateVertexArrays(1, &dummyVAO);
 
-	for (size_t i = 0; i < numPointLights; i++)
+	for (size_t i = 0; i < MAX_POINT_LIGHTS; i++)
 	{
-		pointLights[i].color = glm::vec3((float)i / numPointLights, 1.0 - (float)i / numPointLights, 1.0);
+		pointLights[i].color = glm::vec3(randomFloat(),randomFloat(),randomFloat());
 	}
 
+	//Monkey positions
+	{
+		int numColumns = sqrt(MONKEY_COUNT);
+		for (size_t i = 0; i < MONKEY_COUNT; i++)
+		{
+			monkeyTransforms[i].position = glm::vec3((i % numColumns) * 6.0, 0, (i / numColumns) * 6.0);
+		}
+	}
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
@@ -159,16 +179,24 @@ int main() {
 		cameraController.move(window, &mainCamera, deltaTime);
 
 		//Spin the monkey
-		monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
-
-		//Spin point lights
-		const float orbitRadius = 8.0f;
-	    const float thetaStep = glm::two_pi<float>() / numPointLights;
-		for (size_t i = 0; i < numPointLights; i++)
+		for (size_t i = 0; i < MONKEY_COUNT; i++)
 		{
-			float theta = i * thetaStep + time;
-			pointLights[i].position = glm::vec3(cosf(theta)* orbitRadius, 1, sin(theta) * orbitRadius);
+			monkeyTransforms[i].rotation = glm::rotate(monkeyTransforms[i].rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
 		}
+		
+
+		//Place point lights
+		{
+			float spacing = 1.5f;
+			int numColumns = sqrt(numPointLights);
+			const float thetaStep = glm::two_pi<float>() / numPointLights;
+			for (size_t i = 0; i < numPointLights; i++)
+			{
+				float theta = i * thetaStep + time;
+				pointLights[i].position = glm::vec3((i % numColumns) * spacing - spacing/2.0f, 0, (i / numColumns) * spacing - spacing/2.0f);
+			}
+		}
+		
 
 		glDisable(GL_BLEND);
 		//RENDER SHADOW MAP
@@ -176,8 +204,8 @@ int main() {
 		glViewport(0, 0, shadowFBO.width, shadowFBO.height);
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_DEPTH_BUFFER_BIT);
-		shadowCamera.target = glm::vec3(0);
-		shadowCamera.position = normalize(-mainLight.direction) * shadowSettings.camDistance;
+
+		shadowCamera.position = shadowCamera.target - (glm::normalize(mainLight.direction) * shadowSettings.camDistance);
 		glCullFace(GL_FRONT);
 		drawScene(shadowCamera,depthOnlyShader);
 
@@ -194,7 +222,7 @@ int main() {
 			glBindFramebuffer(GL_FRAMEBUFFER, lightVolumeBuffer.fbo);
 			glViewport(0, 0, lightVolumeBuffer.width, lightVolumeBuffer.height);
 			glClearColor(0, 0, 0, 1.0);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			glClear(GL_COLOR_BUFFER_BIT);
 
 			//Bind textures
 			glBindTextureUnit(0, gBuffer.colorBuffers[0]);
@@ -332,12 +360,14 @@ void drawUI() {
 			ImGui::ColorEdit3("Color", &mainLight.color.r);
 			ImGui::SliderFloat3("Direction", &mainLight.direction.x, -1.0f, 1.0f);
 
-			if (ImGui::SliderFloat("Point Light Radius", &pointLightRadius, 0.0f, 50.0f)) {
+			if (ImGui::SliderFloat("Point Light Radius", &pointLightRadius, 0.0f, 256.0f)) {
 				for (size_t i = 0; i < numPointLights; i++)
 				{
 					pointLights[i].radius = pointLightRadius;
 				}
 			}
+			ImGui::SliderFloat("Point Light Orbit Radius", &orbitRadius, 0.0f, 50.0f);
+			ImGui::SliderInt("Num lights", &numPointLights, 0, MAX_POINT_LIGHTS);
 		}
 		if (ImGui::CollapsingHeader("Shadows")) {
 			ImGui::DragFloat("Shadow cam distance", &shadowSettings.camDistance);

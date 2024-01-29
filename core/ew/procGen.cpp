@@ -73,9 +73,9 @@ namespace ew {
 				Vertex v;                                                                                                                                                                                                                                                                                                                                                                                                    
 				v.uv.x = ((float)col / subdivisions);
 				v.uv.y = ((float)row / subdivisions);
-				v.pos.x = -width/2 + width * v.uv.x;
+				v.pos.x = width * v.uv.x;
 				v.pos.y = 0;
-				v.pos.z = height/2 -height * v.uv.y;
+				v.pos.z = height * v.uv.y;
 				v.normal = vec3(0, 1, 0);
 				v.tangent = vec3(1, 0, 0);
 				mesh.vertices.push_back(v);
@@ -88,10 +88,10 @@ namespace ew {
 			{
 				int start = row * columns + col;
 				mesh.indices.push_back(start);
+				mesh.indices.push_back(start + columns + 1);
 				mesh.indices.push_back(start + 1);
-				mesh.indices.push_back(start + columns + 1);
-				mesh.indices.push_back(start + columns + 1);
 				mesh.indices.push_back(start + columns);
+				mesh.indices.push_back(start + columns + 1);
 				mesh.indices.push_back(start);
 			}
 		}

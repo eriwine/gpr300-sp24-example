@@ -11,11 +11,11 @@ in Surface{
 
 uniform layout(binding = 0) sampler2D _MainTex;
 uniform layout(binding = 1) sampler2D _NormalMap;
-
+uniform vec2 _Tiling = vec2(1.0);
 void main(){
 	gPosition = fs_in.WorldPos;
-	gAlbedo.rgb = texture(_MainTex,fs_in.TexCoord).rgb;
-	vec3 normal = texture(_NormalMap,fs_in.TexCoord).rgb * 2.0 - 1.0;
+	gAlbedo.rgb = texture(_MainTex,fs_in.TexCoord * _Tiling).rgb;
+	vec3 normal = texture(_NormalMap,fs_in.TexCoord * _Tiling).rgb * 2.0 - 1.0;
 	normal = normalize(fs_in.TBN * normal);
 	gNormal = normal;
 }
