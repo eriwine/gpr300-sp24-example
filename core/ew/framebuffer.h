@@ -7,7 +7,7 @@ namespace ew {
 		unsigned int width;
 		unsigned int height;
 	};
-	Framebuffer createFramebuffer(unsigned int width, unsigned int height);
+	Framebuffer createFramebuffer(unsigned int width, unsigned int height, int colorFormat);
 	Framebuffer createDepthOnlyFramebuffer(unsigned int width, unsigned int height);
 	Framebuffer createGBuffers(unsigned int width, unsigned int height);
 }

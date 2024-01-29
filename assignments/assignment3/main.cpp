@@ -40,10 +40,14 @@ struct Light {
 	glm::vec3 color = glm::vec3(1.0f);
 }mainLight;
 
-const int MAX_POINT_LIGHTS = 16;
+
+//Global setting
+float pointLightRadius = 7.5f;
+
+const int MAX_POINT_LIGHTS = 64;
 struct PointLight {
 	glm::vec3 position = glm::vec3(0);
-	float radius = 10.0f;
+	float radius = pointLightRadius;
 	glm::vec3 color = glm::vec3(1.0f);
 };
 PointLight pointLights[MAX_POINT_LIGHTS];
@@ -111,7 +115,7 @@ int main() {
 	//Load models
 	monkeyModel = ew::Model("assets/Suzanne.obj");
 	planeMesh = ew::Mesh(ew::createPlane(10, 10, 1));
-	sphereMesh = ew::Mesh(ew::createSphere(1.0f, 32));
+	sphereMesh = ew::Mesh(ew::createSphere(1.0f, 16));
 	planeTransform.position.y = -2;
 
 	glEnable(GL_CULL_FACE);
@@ -131,8 +135,8 @@ int main() {
 	shadowCamera.orthographic = true;
 
 	//Initialize framebuffers
-	framebuffer = ew::createFramebuffer(screenWidth, screenHeight);
-	lightVolumeBuffer = ew::createFramebuffer(screenWidth, screenHeight);
+	framebuffer = ew::createFramebuffer(screenWidth, screenHeight, GL_RGBA16F);
+	lightVolumeBuffer = ew::createFramebuffer(screenWidth, screenHeight, GL_RGB16F);
 	shadowFBO = ew::createDepthOnlyFramebuffer(512, 512);
 	gBuffer = ew::createGBuffers(screenWidth, screenHeight);
 
@@ -195,7 +199,6 @@ int main() {
 			//Bind textures
 			glBindTextureUnit(0, gBuffer.colorBuffers[0]);
 			glBindTextureUnit(1, gBuffer.colorBuffers[1]);
-			glBindTextureUnit(2, gBuffer.colorBuffers[2]);
 
 			deferredLightVolume.use();
 			deferredLightVolume.setMat4("_ViewProjection", mainCamera.projectionMatrix() * mainCamera.viewMatrix());
@@ -205,9 +208,12 @@ int main() {
 			deferredLightVolume.setFloat("_Material.Shininess", material.Shininess);
 			deferredLightVolume.setVec3("_EyePos", mainCamera.position);
 			deferredLightVolume.setVec2("_ScreenSize", lightVolumeBuffer.width, lightVolumeBuffer.height);
+
 			//Additive blending
 			glEnable(GL_BLEND);
 			glBlendFunc(GL_ONE, GL_ONE);
+			glCullFace(GL_FRONT);
+			glDepthMask(GL_FALSE);
 
 			for (size_t i = 0; i < numPointLights; i++)
 			{
@@ -216,14 +222,16 @@ int main() {
 				deferredLightVolume.setFloat("_PointLight.radius", pointLights[i].radius);
 
 				glm::mat4 m = glm::mat4(1.0f);
-				m = glm::scale(m, glm::vec3(pointLights[i].radius));
 				m = glm::translate(m, pointLights[i].position);
+				m = glm::scale(m, glm::vec3(pointLights[i].radius));
 				deferredLightVolume.setMat4("_Model", m);
 				sphereMesh.draw();
 			}
 		}
 
 		glDisable(GL_BLEND);
+		glCullFace(GL_BACK);
+		glDepthMask(GL_TRUE);
 
 		//Deferred shading
 		//Lighting done in screenspace
@@ -238,6 +246,7 @@ int main() {
 			glBindTextureUnit(1, gBuffer.colorBuffers[1]);
 			glBindTextureUnit(2, gBuffer.colorBuffers[2]);
 			glBindTextureUnit(3, shadowFBO.depthBuffer);
+			glBindTextureUnit(4, lightVolumeBuffer.colorBuffers[0]);
 
 			deferredShader.use();
 			deferredShader.setFloat("_Material.Ka", material.Ka);
@@ -277,8 +286,9 @@ int main() {
 			for (size_t i = 0; i < numPointLights; i++)
 			{
 				glm::mat4 m = glm::mat4(1.0f);
-				m = glm::scale(m, glm::vec3(0.5f));
 				m = glm::translate(m, pointLights[i].position);
+				m = glm::scale(m, glm::vec3(0.5f));
+
 				emissiveShader.setMat4("_Model", m);
 				emissiveShader.setVec3("_Color", pointLights[i].color);
 				sphereMesh.draw();
@@ -297,7 +307,6 @@ int main() {
 			glBindVertexArray(dummyVAO);
 			glDrawArrays(GL_TRIANGLES, 0, 3);
 		}
-		
 
 		drawUI();
 
@@ -329,6 +338,13 @@ void drawUI() {
 		if (ImGui::CollapsingHeader("Light")) {
 			ImGui::ColorEdit3("Color", &mainLight.color.r);
 			ImGui::SliderFloat3("Direction", &mainLight.direction.x, -1.0f, 1.0f);
+
+			if (ImGui::SliderFloat("Point Light Radius", &pointLightRadius, 0.0f, 50.0f)) {
+				for (size_t i = 0; i < numPointLights; i++)
+				{
+					pointLights[i].radius = pointLightRadius;
+				}
+			}
 		}
 		if (ImGui::CollapsingHeader("Shadows")) {
 			ImGui::DragFloat("Shadow cam distance", &shadowSettings.camDistance);

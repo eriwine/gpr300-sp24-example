@@ -32,34 +32,8 @@ uniform layout(binding = 3) sampler2D _ShadowMap;
 uniform float _MinBias = 0.005; 
 uniform float _MaxBias = 0.015;
 
-//Point lights
-struct PointLight{
-	vec3 position;
-	vec3 color;
-	float radius;
-};
-#define MAX_POINT_LIGHTS 16
-uniform PointLight _PointLights[MAX_POINT_LIGHTS];
-uniform int _NumPointLights = MAX_POINT_LIGHTS;
-
-vec3 calcPointLight(PointLight light, vec3 worldPos, vec3 normal){
-	vec3 toLight = normalize(light.position - worldPos);
-	float diffuseFactor = max(dot(normal,toLight),0.0);
-	//Calculate specularly reflected light
-	vec3 toEye = normalize(_EyePos - worldPos);
-	//Blinn-phong uses half angle
-	vec3 h = normalize(toLight + toEye);
-	float specularFactor = pow(max(dot(normal,h),0.0),_Material.Shininess);
-	//Combination of specular and diffuse reflection
-	vec3 lightColor = (_Material.Kd * diffuseFactor + _Material.Ks * specularFactor) * light.color;
-
-	//Attenuation
-	float d = length(light.position - worldPos);
-	float i = clamp(1.0 - pow((d / light.radius),4),0,1);
-	i = i * i;
-	lightColor *= i;
-	return lightColor;
-}
+//Contains added secondary colors
+uniform layout(binding = 4) sampler2D _PointLightBuffer;
 
 //Returns 0 in shadow, 1 out of shadow
 float calcShadow(vec4 lightSpacePos, vec3 normal, vec3 toLight){
@@ -94,27 +68,23 @@ void main(){
 	vec3 worldPos = texture(_gPositions,UV).xyz;
 	vec3 albedo = texture(_gAlbedo,UV).xyz;
 
-	//vec3 normal = normalize(fs_in.WorldNormal);
-	//Light pointing straight down
+	//Main directional light
 	vec3 toLight = -normalize(_MainLight.direction);
 	float diffuseFactor = max(dot(normal,toLight),0.0);
-	//Calculate specularly reflected light
 	vec3 toEye = normalize(_EyePos - worldPos);
-	//Blinn-phong uses half angle
 	vec3 h = normalize(toLight + toEye);
 	float specularFactor = pow(max(dot(normal,h),0.0),_Material.Shininess);
-	//Combination of specular and diffuse reflection
 	vec3 lightColor = (_Material.Kd * diffuseFactor + _Material.Ks * specularFactor) * _MainLight.color;
 
+	//Cast shadows for main light
 	vec4 lightSpacePos = _LightTransform * vec4(worldPos,1);
 	lightColor*=calcShadow(lightSpacePos,normal,toLight);
 
+	//Add secondary lights
+	lightColor += texture(_PointLightBuffer,UV).rgb;
+
+	//Add ambient
 	lightColor+=_AmbientColor * _Material.Ka;
 
-//	//Add all point lights
-//	for(int i = 0; i < _NumPointLights; i++){
-//		lightColor+=calcPointLight(_PointLights[i],worldPos,normal);
-//	}
-//
 	FragColor = vec4(albedo * lightColor,1.0);
 }

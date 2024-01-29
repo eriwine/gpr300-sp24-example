@@ -1,5 +1,5 @@
 #version 450
-out vec4 FragColor;
+out vec3 FragColor;
 
 //Point lights
 struct PointLight{
@@ -18,7 +18,6 @@ struct Material{
 //Gbuffers
 uniform layout(binding = 0) sampler2D _gPositions;
 uniform layout(binding = 1) sampler2D _gNormals;
-uniform layout(binding = 2) sampler2D _gAlbedo;
 
 uniform vec3 _EyePos;
 
@@ -50,9 +49,6 @@ void main(){
     vec2 UV = gl_FragCoord.xy / _ScreenSize; 
 	vec3 normal = texture(_gNormals,UV).xyz;
 	vec3 worldPos = texture(_gPositions,UV).xyz;
-	vec3 albedo = texture(_gAlbedo,UV).xyz;
 	vec3 lightColor = calcPointLight(_PointLight,worldPos,normal);
-	FragColor = vec4(lightColor,1.0);
-	//FragColor = vec4(_PointLight.color,1.0);
-	//FragColor = vec4(UV,0.0,1.0);
+	FragColor = lightColor;
 }

@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 namespace ew {
-	Framebuffer createFramebuffer(unsigned int width, unsigned int height)
+	Framebuffer createFramebuffer(unsigned int width, unsigned int height, int colorFormat)
 	{
 		Framebuffer framebuffer;
 		framebuffer.width = width;
@@ -14,7 +14,7 @@ namespace ew {
 
 		glGenTextures(1, &framebuffer.colorBuffers[0]);
 		glBindTexture(GL_TEXTURE_2D, framebuffer.colorBuffers[0]);
-		glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA16F, width, height);
+		glTexStorage2D(GL_TEXTURE_2D, 1, colorFormat, width, height);
 		glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, framebuffer.colorBuffers[0], 0);
 
 		glGenTextures(1, &framebuffer.depthBuffer);
