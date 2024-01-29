@@ -25,6 +25,11 @@ uniform Material _Material;
 uniform PointLight _PointLight;
 
 vec3 calcPointLight(PointLight light, vec3 worldPos, vec3 normal){
+
+	float d = length(light.position - worldPos);
+	if (d > light.radius)
+		return vec3(0);
+
 	vec3 toLight = normalize(light.position - worldPos);
 	float diffuseFactor = max(dot(normal,toLight),0.0);
 	//Calculate specularly reflected light
@@ -36,7 +41,6 @@ vec3 calcPointLight(PointLight light, vec3 worldPos, vec3 normal){
 	vec3 lightColor = (_Material.Kd * diffuseFactor + _Material.Ks * specularFactor) * light.color;
 
 	//Attenuation
-	float d = length(light.position - worldPos);
 	float i = clamp(1.0 - pow((d / light.radius),4),0,1);
 	i = i * i;
 	lightColor *= i;
@@ -49,6 +53,7 @@ void main(){
     vec2 UV = gl_FragCoord.xy / _ScreenSize; 
 	vec3 normal = texture(_gNormals,UV).xyz;
 	vec3 worldPos = texture(_gPositions,UV).xyz;
+	
 	vec3 lightColor = calcPointLight(_PointLight,worldPos,normal);
 	FragColor = lightColor;
 }

@@ -30,6 +30,28 @@ namespace ew {
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		return framebuffer;
 	}
+	Framebuffer createFramebufferColorOnly(unsigned int width, unsigned int height, int colorFormat)
+	{
+		Framebuffer framebuffer;
+		framebuffer.width = width;
+		framebuffer.height = height;
+
+		glCreateFramebuffers(1, &framebuffer.fbo);
+		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
+
+		glGenTextures(1, &framebuffer.colorBuffers[0]);
+		glBindTexture(GL_TEXTURE_2D, framebuffer.colorBuffers[0]);
+		glTexStorage2D(GL_TEXTURE_2D, 1, colorFormat, width, height);
+		glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, framebuffer.colorBuffers[0], 0);
+
+		GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+		if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
+			printf("Framebuffer incomplete: %d", fboStatus);
+		}
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		return framebuffer;
+	}
 	Framebuffer createDepthOnlyFramebuffer(unsigned int width, unsigned int height)
 	{
 		Framebuffer framebuffer;

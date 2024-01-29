@@ -136,7 +136,7 @@ int main() {
 
 	//Initialize framebuffers
 	framebuffer = ew::createFramebuffer(screenWidth, screenHeight, GL_RGBA16F);
-	lightVolumeBuffer = ew::createFramebuffer(screenWidth, screenHeight, GL_RGB16F);
+	lightVolumeBuffer = ew::createFramebufferColorOnly(screenWidth, screenHeight, GL_RGB16F);
 	shadowFBO = ew::createDepthOnlyFramebuffer(512, 512);
 	gBuffer = ew::createGBuffers(screenWidth, screenHeight);
 
@@ -233,7 +233,7 @@ int main() {
 		glCullFace(GL_BACK);
 		glDepthMask(GL_TRUE);
 
-		//Deferred shading
+		//Deferred shading 
 		//Lighting done in screenspace
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
@@ -260,13 +260,6 @@ int main() {
 			deferredShader.setFloat("_MaxBias", shadowSettings.maxBias);
 			deferredShader.setMat4("_LightTransform", shadowCamera.projectionMatrix() * shadowCamera.viewMatrix());
 
-			for (size_t i = 0; i < numPointLights; i++)
-			{
-				std::string uniformPrefix = "_PointLights[" + std::to_string(i) + "].";
-				deferredShader.setVec3(uniformPrefix + "position", pointLights[i].position);
-				deferredShader.setVec3(uniformPrefix + "color", pointLights[i].color);
-				deferredShader.setFloat(uniformPrefix + "radius", pointLights[i].radius);
-			}
 			glBindVertexArray(dummyVAO);
 			glDrawArrays(GL_TRIANGLES, 0, 3);
 		}
@@ -287,7 +280,7 @@ int main() {
 			{
 				glm::mat4 m = glm::mat4(1.0f);
 				m = glm::translate(m, pointLights[i].position);
-				m = glm::scale(m, glm::vec3(0.5f));
+				m = glm::scale(m, glm::vec3(0.1f));
 
 				emissiveShader.setMat4("_Model", m);
 				emissiveShader.setVec3("_Color", pointLights[i].color);
