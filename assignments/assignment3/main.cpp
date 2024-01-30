@@ -126,7 +126,7 @@ int main() {
 	ew::Shader postProcessShader = ew::Shader("assets/fsTriangle.vert", "assets/tonemapping.frag");
 	ew::Shader gBufferShader = ew::Shader("assets/gBufferPass.vert", "assets/gBufferPass.frag");
 	ew::Shader deferredShader = ew::Shader("assets/fsTriangle.vert", "assets/deferredShading.frag");
-	ew::Shader emissiveShader = ew::Shader("assets/emissive.vert", "assets/emissive.frag");
+	ew::Shader emissiveShader = ew::Shader("assets/instancedLightOrb.vert", "assets/instancedLightOrb.frag");
 	ew::Shader deferredLightVolume = ew::Shader("assets/deferredLightVolume.vert", "assets/deferredLightVolume.frag");
 
 	//Load models
@@ -329,17 +329,9 @@ int main() {
 		{
 			emissiveShader.use();
 			emissiveShader.setMat4("_ViewProjection", mainCamera.projectionMatrix() * mainCamera.viewMatrix());
-			for (size_t i = 0; i < numPointLights; i++)
-			{
-				glm::mat4 m = glm::mat4(1.0f);
-				m = glm::translate(m, pointLights[i].position);
-				m = glm::scale(m, glm::vec3(0.1f));
-
-				emissiveShader.setMat4("_Model", m);
-				emissiveShader.setVec3("_Color", pointLights[i].color);
-				sphereMesh.draw();
-			}
+			sphereMesh.drawInstanced(ew::DrawMode::TRIANGLES, numPointLights);
 		}
+
 		//Draw to screen w/ post processing
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
