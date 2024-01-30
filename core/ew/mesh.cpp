@@ -69,6 +69,15 @@ namespace ew {
 		else {
 			glDrawArrays(GL_POINTS, 0, m_numVertices);
 		}
-		
+	}
+
+	void Mesh::drawInstanced(DrawMode drawMode, int instanceCount)const {
+		glBindVertexArray(m_vao);
+		if (drawMode == DrawMode::TRIANGLES) {
+			glDrawElementsInstanced(GL_TRIANGLES, m_numIndices, GL_UNSIGNED_INT, NULL, instanceCount);
+		}
+		else {
+			glDrawArraysInstanced(GL_POINTS, 0, m_numVertices, instanceCount);
+		}
 	}
 }

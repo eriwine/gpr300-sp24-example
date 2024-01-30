@@ -37,7 +37,7 @@ struct Material {
 
 struct Light {
 	glm::vec3 direction = glm::vec3(0, -1.0f, 0);
-	glm::vec3 color = glm::vec3(1.0f);
+	glm::vec3 color = glm::vec3(0.5f);
 }mainLight;
 
 
@@ -81,6 +81,12 @@ struct ShadowSettings {
 	float minBias = 0.005f;
 	float maxBias = 0.01f;
 }shadowSettings;
+
+//Instanced point light colors
+struct InstancedLightData {
+	glm::vec4 positionScale; //xyz = position, w = scale
+	glm::vec3 color;
+}instancedLightData[MAX_POINT_LIGHTS];
 
 void drawScene(ew::Camera& camera, ew::Shader& shader) {
 	shader.use();
@@ -158,7 +164,32 @@ int main() {
 
 	for (size_t i = 0; i < MAX_POINT_LIGHTS; i++)
 	{
-		pointLights[i].color = glm::vec3(randomFloat(),randomFloat(),randomFloat());
+		pointLights[i].color = glm::vec3(randomFloat(), randomFloat(), randomFloat());
+		instancedLightData[i].color = pointLights[i].color;
+	}
+	unsigned int lightInstanceVBO;
+	//Setup per instance colors for lights
+	{
+		glBindVertexArray(sphereMesh.getVaoID());
+		
+		glGenBuffers(1, &lightInstanceVBO);
+		glBindBuffer(GL_ARRAY_BUFFER, lightInstanceVBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(instancedLightData), &instancedLightData[0], GL_DYNAMIC_DRAW);
+
+		//PositionScale vec4
+		glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(InstancedLightData), (void*)0);
+		glEnableVertexAttribArray(4);
+
+		//RGB color vec3
+		glVertexAttribPointer(5, 3, GL_FLOAT, GL_FALSE, sizeof(InstancedLightData), (void*)offsetof(InstancedLightData,color));
+		glEnableVertexAttribArray(5);
+
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		//These attributes are per instance, not vertex
+		glVertexAttribDivisor(4, 1);
+		glVertexAttribDivisor(5, 1);
+		glBindVertexArray(0);
 	}
 
 	//Monkey positions
@@ -184,7 +215,6 @@ int main() {
 			monkeyTransforms[i].rotation = glm::rotate(monkeyTransforms[i].rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
 		}
 		
-
 		//Place point lights
 		{
 			float spacing = 1.5f;
@@ -194,9 +224,12 @@ int main() {
 			{
 				float theta = i * thetaStep + time;
 				pointLights[i].position = glm::vec3((i % numColumns) * spacing - spacing/2.0f, 0, (i / numColumns) * spacing - spacing/2.0f);
+				instancedLightData[i].positionScale = glm::vec4(pointLights[i].position, pointLights[i].radius);
 			}
 		}
-		
+
+		//Update instanced light data
+		glNamedBufferData(lightInstanceVBO, sizeof(instancedLightData), &instancedLightData[0], GL_DYNAMIC_DRAW);
 
 		glDisable(GL_BLEND);
 		//RENDER SHADOW MAP
@@ -224,11 +257,12 @@ int main() {
 			glClearColor(0, 0, 0, 1.0);
 			glClear(GL_COLOR_BUFFER_BIT);
 
+			deferredLightVolume.use();
+
 			//Bind textures
 			glBindTextureUnit(0, gBuffer.colorBuffers[0]);
 			glBindTextureUnit(1, gBuffer.colorBuffers[1]);
-
-			deferredLightVolume.use();
+			
 			deferredLightVolume.setMat4("_ViewProjection", mainCamera.projectionMatrix() * mainCamera.viewMatrix());
 			deferredLightVolume.setFloat("_Material.Ka", material.Ka);
 			deferredLightVolume.setFloat("_Material.Kd", material.Kd);
@@ -243,23 +277,14 @@ int main() {
 			glCullFace(GL_FRONT);
 			glDepthMask(GL_FALSE);
 
-			for (size_t i = 0; i < numPointLights; i++)
-			{
-				deferredLightVolume.setVec3("_PointLight.position", pointLights[i].position);
-				deferredLightVolume.setVec3("_PointLight.color", pointLights[i].color);
-				deferredLightVolume.setFloat("_PointLight.radius", pointLights[i].radius);
+			sphereMesh.drawInstanced(ew::DrawMode::TRIANGLES, numPointLights);
 
-				glm::mat4 m = glm::mat4(1.0f);
-				m = glm::translate(m, pointLights[i].position);
-				m = glm::scale(m, glm::vec3(pointLights[i].radius));
-				deferredLightVolume.setMat4("_Model", m);
-				sphereMesh.draw();
-			}
+			glDisable(GL_BLEND);
+			glCullFace(GL_BACK);
+			glDepthMask(GL_TRUE);
 		}
 
-		glDisable(GL_BLEND);
-		glCullFace(GL_BACK);
-		glDepthMask(GL_TRUE);
+		
 
 		//Deferred shading 
 		//Lighting done in screenspace
@@ -360,7 +385,7 @@ void drawUI() {
 			ImGui::ColorEdit3("Color", &mainLight.color.r);
 			ImGui::SliderFloat3("Direction", &mainLight.direction.x, -1.0f, 1.0f);
 
-			if (ImGui::SliderFloat("Point Light Radius", &pointLightRadius, 0.0f, 256.0f)) {
+			if (ImGui::SliderFloat("Point Light Radius", &pointLightRadius, 0.0f, 5.0f)) {
 				for (size_t i = 0; i < numPointLights; i++)
 				{
 					pointLights[i].radius = pointLightRadius;

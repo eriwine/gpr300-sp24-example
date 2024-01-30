@@ -116,7 +116,7 @@ int main() {
 	shadowCamera.orthographic = true;
 
 	//Initialize framebuffers
-	framebuffer = ew::createFramebuffer(screenWidth, screenHeight);
+	framebuffer = ew::createFramebuffer(screenWidth, screenHeight, GL_RGBA16F);
 	shadowFBO = ew::createDepthOnlyFramebuffer(512, 512);
 
 	//Used for supplying indices to vertex shaders

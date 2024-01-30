@@ -56,7 +56,7 @@ int main() {
 	camera.aspectRatio = (float)screenWidth / screenHeight;
 	camera.fov = 60.0f; //Vertical field of view, in degrees
 
-	ew::Framebuffer framebuffer = ew::createFramebuffer(screenWidth, screenHeight);
+	ew::Framebuffer framebuffer = ew::createFramebuffer(screenWidth, screenHeight, GL_RGB16F);
 
 	//Used for supplying indices to vertex shaders
 	unsigned int dummyVAO;
