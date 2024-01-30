@@ -64,9 +64,13 @@ namespace ew {
 		glGenTextures(1, &framebuffer.depthBuffer);
 		glBindTexture(GL_TEXTURE_2D, framebuffer.depthBuffer);
 		glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT16, width, height);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 		float borderColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, framebuffer.depthBuffer, 0);
 
@@ -93,11 +97,22 @@ namespace ew {
 		//0 = World Position 
 		//1 = World Normal
 		//2 = Albedo
+
+		int formats[3] = {
+			GL_RGB32F,
+			GL_RGB16F,
+			GL_RGB16F
+		};
 		for (size_t i = 0; i < 3; i++)
 		{
 			glGenTextures(1, &framebuffer.colorBuffers[i]);
 			glBindTexture(GL_TEXTURE_2D, framebuffer.colorBuffers[i]);
-			glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGB16F, width, height);
+			
+			glTexStorage2D(GL_TEXTURE_2D, 1, formats[i], width, height);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 			glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, framebuffer.colorBuffers[i], 0);
 		}
 

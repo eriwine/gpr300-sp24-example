@@ -148,7 +148,7 @@ int main() {
 	shadowCamera.aspectRatio = 1;
 	shadowCamera.farPlane = 50;
 	shadowCamera.nearPlane = 1.0;
-	shadowCamera.orthoHeight = 20.0f;
+	shadowCamera.orthoHeight = 50.0f;
 	shadowCamera.orthographic = true;
 	shadowCamera.target = glm::vec3(20, 0, 20);
 
