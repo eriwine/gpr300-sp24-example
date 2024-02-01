@@ -134,7 +134,7 @@ int main() {
 	spotLightShadowCamera.farPlane = 50;
 	spotLightShadowCamera.nearPlane = 1.0;
 	spotLightShadowCamera.orthographic = false;
-	spotLightShadowCamera.fov = spotLight.maxAngle;
+	spotLightShadowCamera.fov = 90.0f;
 
 	//Initialize framebuffers
 	framebuffer = ew::createFramebuffer(screenWidth, screenHeight, GL_RGBA16F);
@@ -177,7 +177,7 @@ int main() {
 			glClear(GL_DEPTH_BUFFER_BIT);
 			spotLightShadowCamera.position = spotLight.position;
 			spotLightShadowCamera.target = spotLightShadowCamera.position + glm::normalize(spotLight.direction);
-			spotLightShadowCamera.fov = spotLight.maxAngle;
+			//spotLightShadowCamera.fov = spotLight.maxAngle;
 			//glCullFace(GL_FRONT);
 			drawScene(spotLightShadowCamera, depthOnlyShader);
 		}
