@@ -14,10 +14,11 @@ out Surface{
 	vec2 TexCoord;
 	mat3 TBN;
 	vec4 LightSpacePos; //Clip space position in light space
+	vec4 SpotLightSpacePos; //Clip space position in spotlight space
 }vs_out;
 
-
 uniform mat4 _LightTransform;
+uniform mat4 _SpotLightTransform;
 
 void main(){
 	//Transform vertex position to World Space.
@@ -28,4 +29,5 @@ void main(){
 	gl_Position = _ViewProjection * _Model * vec4(vPos,1.0);
 
 	vs_out.LightSpacePos = _LightTransform * vec4(vs_out.WorldPos,1.0);
+	vs_out.SpotLightSpacePos = _SpotLightTransform * vec4(vs_out.WorldPos,1.0);
 }

@@ -39,7 +39,13 @@ struct Material {
 struct Light {
 	glm::vec3 direction = glm::vec3(-0.77f, -0.77f, 0);
 	glm::vec3 color = glm::vec3(1.0f);
+	glm::vec3 position = glm::vec3(0);
+	float radius = 10.0f;
+	float minAngle = 30.0f;
+	float maxAngle = 60.0f;
 }mainLight;
+
+Light spotLight;
 
 bool postProcessEnabled;
 
@@ -58,13 +64,17 @@ ew::Framebuffer framebuffer;
 
 //Shadows
 ew::Framebuffer shadowFBO;
+ew::Framebuffer spotLightShadowFBO;
 ew::Camera shadowCamera;
+ew::Camera spotLightShadowCamera;
+
 struct ShadowSettings {
 	float camDistance = 10.0f;
 	float minBias = 0.005f;
 	float maxBias = 0.01f;
 }shadowSettings;
 
+bool spinMonkey = false;
 void drawScene(ew::Camera& camera, ew::Shader& shader) {
 	shader.use();
 	shader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
@@ -79,6 +89,7 @@ void drawScene(ew::Camera& camera, ew::Shader& shader) {
 	shader.setMat4("_Model", planeTransform.modelMatrix());
 	planeMesh.draw();
 }
+
 
 int main() {
 	GLFWwindow* window = initWindow("Assignment 0", screenWidth, screenHeight);
@@ -96,8 +107,7 @@ int main() {
 	//Load models
 	monkeyModel = ew::Model("assets/Suzanne.obj");
 	planeMesh = ew::Mesh(ew::createPlane(10, 10, 1));
-
-	planeTransform.position.y = -2;
+	planeTransform.position = glm::vec3(-5, -2, -5);
 
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK); //Back face culling
@@ -109,15 +119,27 @@ int main() {
 	mainCamera.aspectRatio = (float)screenWidth / screenHeight;
 	mainCamera.fov = 60.0f; //Vertical field of view, in degrees
 
+	//Directional shadow camera
 	shadowCamera.aspectRatio = 1;
 	shadowCamera.farPlane = 50;
 	shadowCamera.nearPlane = 1.0;
-	shadowCamera.orthoHeight = 10.0f;
+	shadowCamera.orthoHeight = 10;
 	shadowCamera.orthographic = true;
+
+	spotLight.position = glm::vec3(0, 5.0f, 0);
+	spotLight.direction = glm::vec3(0, -1.0f, 0);
+
+	//Spotlight shadow camera
+	spotLightShadowCamera.aspectRatio = 1;
+	spotLightShadowCamera.farPlane = 50;
+	spotLightShadowCamera.nearPlane = 1.0;
+	spotLightShadowCamera.orthographic = false;
+	spotLightShadowCamera.fov = spotLight.maxAngle;
 
 	//Initialize framebuffers
 	framebuffer = ew::createFramebuffer(screenWidth, screenHeight, GL_RGBA16F);
-	shadowFBO = ew::createDepthOnlyFramebuffer(512, 512);
+	shadowFBO = ew::createDepthOnlyFramebuffer(1024, 1024);
+	spotLightShadowFBO = ew::createDepthOnlyFramebuffer(512, 512);
 
 	//Used for supplying indices to vertex shaders
 	unsigned int dummyVAO;
@@ -133,57 +155,90 @@ int main() {
 		cameraController.move(window, &mainCamera, deltaTime);
 
 		//Spin the monkey
-		monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
+		if (spinMonkey) {
+			monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
+		}
+		
+		//RENDER MAIN LIGHT SHADOW MAP
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO.fbo);
+			glViewport(0, 0, shadowFBO.width, shadowFBO.height);
+			glClear(GL_DEPTH_BUFFER_BIT);
+			shadowCamera.target = glm::vec3(0);
+			shadowCamera.position = normalize(-mainLight.direction) * shadowSettings.camDistance;
+			//glCullFace(GL_FRONT);
+			drawScene(shadowCamera, depthOnlyShader);
+		}
 
-		//RENDER SHADOW MAP
-		glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO.fbo);
-		glViewport(0, 0, shadowFBO.width, shadowFBO.height);
-		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-		glClear(GL_DEPTH_BUFFER_BIT);
-		shadowCamera.target = glm::vec3(0);
-		shadowCamera.position = normalize(-mainLight.direction) * shadowSettings.camDistance;
-		glCullFace(GL_FRONT);
-		drawScene(shadowCamera,depthOnlyShader);
+		//RENDER SPOT LIGHT SHADOW MAP
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, spotLightShadowFBO.fbo);
+			glViewport(0, 0, spotLightShadowFBO.width, spotLightShadowFBO.height);
+			glClear(GL_DEPTH_BUFFER_BIT);
+			spotLightShadowCamera.position = spotLight.position;
+			spotLightShadowCamera.target = spotLightShadowCamera.position + glm::normalize(spotLight.direction);
+			spotLightShadowCamera.fov = spotLight.maxAngle;
+			//glCullFace(GL_FRONT);
+			drawScene(spotLightShadowCamera, depthOnlyShader);
+		}
 
 		//RENDER SCENE TO HDR BUFFER
-		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
-		glViewport(0, 0, framebuffer.width, framebuffer.height);
-		glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glCullFace(GL_BACK);
-		//Bind textures
-		glBindTextureUnit(2, shadowFBO.depthBuffer);
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
+			glViewport(0, 0, framebuffer.width, framebuffer.height);
+			glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			glCullFace(GL_BACK);
+			//Bind textures
+			glBindTextureUnit(2, shadowFBO.depthBuffer);
+			glBindTextureUnit(3, spotLightShadowFBO.depthBuffer);
 
-		litShader.use();
-		litShader.setInt("_MainTex", 0);
-		litShader.setInt("_NormalMap", 1);
-		litShader.setInt("_ShadowMap", 2);
-		litShader.setFloat("_Material.Ka", material.Ka);
-		litShader.setFloat("_Material.Kd", material.Kd);
-		litShader.setFloat("_Material.Ks", material.Ks);
-		litShader.setFloat("_Material.Shininess", material.Shininess);
-		litShader.setVec3("_EyePos", mainCamera.position);
-		litShader.setVec3("_MainLight.color", mainLight.color);
-		litShader.setVec3("_MainLight.direction", mainLight.direction);
-		litShader.setFloat("_MinBias", shadowSettings.minBias);
-		litShader.setFloat("_MaxBias", shadowSettings.maxBias);
-		litShader.setMat4("_LightTransform", shadowCamera.projectionMatrix() * shadowCamera.viewMatrix());
+			litShader.use();
+			litShader.setInt("_MainTex", 0);
+			litShader.setInt("_NormalMap", 1);
+			litShader.setInt("_ShadowMap", 2);
+			litShader.setInt("_SpotLight.shadowMap", 3);
+			litShader.setFloat("_Material.Ka", material.Ka);
+			litShader.setFloat("_Material.Kd", material.Kd);
+			litShader.setFloat("_Material.Ks", material.Ks);
+			litShader.setFloat("_Material.Shininess", material.Shininess);
+			litShader.setVec3("_EyePos", mainCamera.position);
 
-		drawScene(mainCamera,litShader);
+			//Main light
+			litShader.setVec3("_MainLight.color", mainLight.color);
+			litShader.setVec3("_MainLight.direction", mainLight.direction);
+			litShader.setMat4("_LightTransform", shadowCamera.projectionMatrix() * shadowCamera.viewMatrix());
+
+			//Spot light
+			litShader.setVec3("_SpotLight.position", spotLight.position);
+			litShader.setVec3("_SpotLight.direction", spotLight.direction);
+			litShader.setFloat("_SpotLight.radius", spotLight.radius);
+			litShader.setVec3("_SpotLight.color", spotLight.color);
+			litShader.setFloat("_SpotLight.cosMinAngle", glm::cos(glm::radians(spotLight.minAngle)));
+			litShader.setFloat("_SpotLight.cosMaxAngle", glm::cos(glm::radians(spotLight.maxAngle)));
+			litShader.setMat4("_SpotLightTransform", spotLightShadowCamera.projectionMatrix() * spotLightShadowCamera.viewMatrix());
+
+			//Shadows
+			litShader.setFloat("_MinBias", shadowSettings.minBias);
+			litShader.setFloat("_MaxBias", shadowSettings.maxBias);
+			drawScene(mainCamera, litShader);
+		}
 
 		//Draw to screen
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		glViewport(0, 0, screenWidth, screenHeight);
-		glClearColor(0, 0, 0, 0);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			glViewport(0, 0, screenWidth, screenHeight);
+			glClearColor(0, 0, 0, 0);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		glBindTextureUnit(0, framebuffer.colorBuffers[0]);
-		//glBindTextureUnit(0, shadowFBO.depthBuffer);
-		postProcessShader.use();
-		glBindVertexArray(dummyVAO);
-		glDrawArrays(GL_TRIANGLES, 0, 3);
+			glBindTextureUnit(0, framebuffer.colorBuffers[0]);
+			//glBindTextureUnit(0, shadowFBO.depthBuffer);
+			postProcessShader.use();
+			glBindVertexArray(dummyVAO);
+			glDrawArrays(GL_TRIANGLES, 0, 3);
 
-		drawUI();
+			drawUI();
+		}
 
 		glfwSwapBuffers(window);
 	}
@@ -210,10 +265,23 @@ void drawUI() {
 			ImGui::SliderFloat("SpecularK", &material.Ks, 0.0f, 1.0f);
 			ImGui::SliderFloat("Shininess", &material.Shininess, 2.0f, 1024.0f);
 		}
-		if (ImGui::CollapsingHeader("Light")) {
+		if (ImGui::CollapsingHeader("Directional Light")) {
+			ImGui::PushID(0);
 			ImGui::ColorEdit3("Color", &mainLight.color.r);
 			ImGui::SliderFloat3("Direction", &mainLight.direction.x, -1.0f, 1.0f);
+			ImGui::PopID();
 		}
+		if (ImGui::CollapsingHeader("SpotLight")) {
+			ImGui::PushID(1);
+			ImGui::ColorEdit3("Color", &spotLight.color.r);
+			ImGui::DragFloat3("Position", &spotLight.position.x);
+			ImGui::SliderFloat3("Direction", &spotLight.direction.x, -1.0f, 1.0f);
+			ImGui::DragFloat("Radius", &spotLight.radius);
+			ImGui::SliderFloat("Min Angle", &spotLight.minAngle, 0.0f, 90.0f);
+			ImGui::SliderFloat("Max Angle", &spotLight.maxAngle, 0.0f, 90.0f);
+			ImGui::PopID();
+		}
+
 		if (ImGui::CollapsingHeader("Shadows")) {
 			ImGui::DragFloat("Shadow cam distance", &shadowSettings.camDistance);
 			ImGui::DragFloat("Shadow cam size", &shadowCamera.orthoHeight);
@@ -223,15 +291,9 @@ void drawUI() {
 	}
 	ImGui::End();
 
-	ImGui::Begin("Shadow Map"); {
-		//Using a Child allow to fill all the space of the window.
-		ImGui::BeginChild("ShadowMap");
-		//Stretch image to be window size
-		ImVec2 windowSize = ImGui::GetWindowSize();
-		//Invert 0-1 V to flip vertically. ImGui::Image expects V = 0 to be on top.
-		ImGui::Image((ImTextureID)shadowFBO.depthBuffer, windowSize, ImVec2(0, 1), ImVec2(1, 0));
-		ImGui::EndChild();
-
+	ImGui::Begin("Shadow Maps"); {
+		ImGui::Image((ImTextureID)shadowFBO.depthBuffer, ImVec2(shadowFBO.width/4, shadowFBO.height/4), ImVec2(0, 1), ImVec2(1, 0));
+		ImGui::Image((ImTextureID)spotLightShadowFBO.depthBuffer, ImVec2(spotLightShadowFBO.width/4, spotLightShadowFBO.height/4), ImVec2(0, 1), ImVec2(1, 0));
 	}
 	ImGui::End();
 

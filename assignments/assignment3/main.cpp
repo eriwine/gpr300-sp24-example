@@ -132,7 +132,7 @@ int main() {
 	//Load models
 	monkeyModel = ew::Model("assets/Suzanne.obj");
 	planeMesh = ew::Mesh(ew::createPlane(40, 40, 1));
-	sphereMesh = ew::Mesh(ew::createSphere(1.0f, 16));
+	sphereMesh = ew::Mesh(ew::createSphere(1.0f, 8));
 	planeTransform.position.y = -1.25;
 
 	glEnable(GL_CULL_FACE);
