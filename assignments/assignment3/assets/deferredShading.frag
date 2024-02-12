@@ -1,4 +1,4 @@
-#version 450
+#version 450 core
 out vec4 FragColor; //The color of this fragment
 
 in vec2 UV;

@@ -1,4 +1,4 @@
-#version 450
+#version 450 core
 out vec2 UV;
 void main(){
 	float u = (((uint(gl_VertexID)+2u) / 3u) % 2u);

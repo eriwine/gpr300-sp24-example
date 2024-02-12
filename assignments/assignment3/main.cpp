@@ -49,7 +49,7 @@ const int MAX_POINT_LIGHTS = 1024;
 struct PointLight {
 	glm::vec3 position = glm::vec3(0);
 	float radius = pointLightRadius;
-	glm::vec3 color = glm::vec3(1.0f);
+	glm::vec4 color = glm::vec4(1.0f);
 };
 PointLight pointLights[MAX_POINT_LIGHTS];
 int numPointLights = 64;
@@ -172,7 +172,7 @@ int main() {
 
 	for (size_t i = 0; i < MAX_POINT_LIGHTS; i++)
 	{
-		pointLights[i].color = glm::vec3(randomFloat(), randomFloat(), randomFloat());
+		pointLights[i].color = glm::vec4(randomFloat(), randomFloat(), randomFloat(), 1.0f);
 		instancedLightData[i].color = pointLights[i].color;
 	}
 	unsigned int lightInstanceVBO;
@@ -208,6 +208,15 @@ int main() {
 			monkeyTransforms[i].position = glm::vec3((i % numColumns) * 6.0, 0, (i / numColumns) * 6.0);
 		}
 	}
+
+	//Uniform Buffer Object to store light data
+	unsigned int lightsUBO;
+	glGenBuffers(1, &lightsUBO);
+	glBindBuffer(GL_UNIFORM_BUFFER, lightsUBO);
+	glBufferData(GL_UNIFORM_BUFFER, sizeof(pointLights), pointLights, GL_DYNAMIC_DRAW);
+	glBindBufferBase(GL_UNIFORM_BUFFER, 0, lightsUBO);
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
@@ -234,6 +243,10 @@ int main() {
 				pointLights[i].position = glm::vec3((i % numColumns) * spacing - spacing/2.0f, 0, (i / numColumns) * spacing - spacing/2.0f);
 				instancedLightData[i].positionScale = glm::vec4(pointLights[i].position, pointLights[i].radius);
 			}
+
+			//Update UBO
+			//glBindBuffer(GL_UNIFORM_BUFFER, lightsUBO);
+			glNamedBufferSubData(lightsUBO, 0, sizeof(pointLights), pointLights);
 		}
 
 		//Update instanced light data
@@ -277,13 +290,7 @@ int main() {
 			litShader.setInt("_ShadowMap", 3);
 
 			litShader.setInt("_NumPointLights", numPointLights);
-			for (size_t i = 0; i < numPointLights; i++)
-			{
-				std::string prefix = "_PointLights[" + std::to_string(i) + "].";
-				litShader.setFloat(prefix + "radius", pointLights[i].radius);
-				litShader.setVec3(prefix + "color", pointLights[i].color);
-				litShader.setVec3(prefix + "position", pointLights[i].position);
-			}
+
 			drawScene(mainCamera, litShader);
 			//Instanced render light sources
 			{

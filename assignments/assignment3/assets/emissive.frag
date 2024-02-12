@@ -1,4 +1,4 @@
-#version 450
+#version 450 core
 
 out vec4 FragColor;
 uniform vec3 _Color;

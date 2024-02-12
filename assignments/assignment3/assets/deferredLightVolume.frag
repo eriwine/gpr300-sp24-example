@@ -1,4 +1,4 @@
-#version 450
+#version 450 core
 out vec3 FragColor;
 
 //Per instanced properties 

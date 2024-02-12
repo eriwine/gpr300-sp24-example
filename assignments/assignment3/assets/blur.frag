@@ -1,5 +1,5 @@
 //Invert effect fragment shader
-#version 450
+#version 450 core
 out vec4 FragColor;
 in vec2 UV;
 uniform sampler2D _ColorBuffer;

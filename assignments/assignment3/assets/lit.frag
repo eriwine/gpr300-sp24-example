@@ -1,4 +1,4 @@
-#version 450
+#version 450 core
 out layout(location = 0) vec4 FragColor; //The color of this fragment
 in Surface{
 	vec3 WorldPos; //Vertex position in world space
@@ -29,11 +29,12 @@ uniform Light _MainLight;
 
 #define MAX_POINT_LIGHTS 1024
 struct PointLight{
-	vec3 position;
-	vec3 color;
-	float radius;
+	vec4 position; //w = radius
+	vec4 color;
 };
-uniform PointLight _PointLights[MAX_POINT_LIGHTS];
+layout (std140, binding=0) uniform AdditionalLights{
+	PointLight _PointLights[MAX_POINT_LIGHTS];
+};
 uniform int _NumPointLights = 8;
 
 uniform sampler2D _ShadowMap;
@@ -79,16 +80,16 @@ vec3 calcBlinnPhong(vec3 toLight, vec3 worldPos, vec3 normal, vec3 lightColor){
 }
 
 vec3 calcPointLight(PointLight light, vec3 worldPos, vec3 normal){
-
-	float d = length(light.position - worldPos);
-	if (d > light.radius)
+	float radius = light.position.w;
+	float d = length(light.position.xyz - worldPos);
+	if (d > radius)
 		return vec3(0);
 
-	vec3 toLight = normalize(light.position - worldPos);
-	vec3 lightColor = calcBlinnPhong(toLight,worldPos,normal,light.color);
+	vec3 toLight = normalize(light.position.xyz - worldPos);
+	vec3 lightColor = calcBlinnPhong(toLight,worldPos,normal,light.color.rgb);
 
 	//Attenuation
-	float i = clamp(1.0 - pow((d / light.radius),4),0,1);
+	float i = clamp(1.0 - pow((d / radius),4),0,1);
 	i = i * i;
 	lightColor *= i;
 	return lightColor;
