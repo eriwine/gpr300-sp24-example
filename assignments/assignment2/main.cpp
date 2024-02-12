@@ -65,6 +65,8 @@ struct ShadowSettings {
 	float maxBias = 0.01f;
 }shadowSettings;
 
+const int SHADOW_RESOLUTION = 512;
+
 void drawScene(ew::Camera& camera, ew::Shader& shader) {
 	shader.use();
 	shader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
@@ -81,7 +83,7 @@ void drawScene(ew::Camera& camera, ew::Shader& shader) {
 }
 
 int main() {
-	GLFWwindow* window = initWindow("Assignment 0", screenWidth, screenHeight);
+	GLFWwindow* window = initWindow("Assignment 2", screenWidth, screenHeight);
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
 	stoneColorTexture = ew::loadTexture("assets/textures/stones_color.png",true);
@@ -97,7 +99,7 @@ int main() {
 	monkeyModel = ew::Model("assets/Suzanne.obj");
 	planeMesh = ew::Mesh(ew::createPlane(10, 10, 1));
 
-	planeTransform.position.y = -2;
+	planeTransform.position = glm::vec3(-5, -2, -5);
 
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK); //Back face culling
@@ -109,6 +111,7 @@ int main() {
 	mainCamera.aspectRatio = (float)screenWidth / screenHeight;
 	mainCamera.fov = 60.0f; //Vertical field of view, in degrees
 
+	//Orthographic shadow camera for directional light
 	shadowCamera.aspectRatio = 1;
 	shadowCamera.farPlane = 50;
 	shadowCamera.nearPlane = 1.0;
@@ -117,7 +120,7 @@ int main() {
 
 	//Initialize framebuffers
 	framebuffer = ew::createFramebuffer(screenWidth, screenHeight, GL_RGBA16F);
-	shadowFBO = ew::createDepthOnlyFramebuffer(512, 512);
+	shadowFBO = ew::createDepthOnlyFramebuffer(SHADOW_RESOLUTION, SHADOW_RESOLUTION);
 
 	//Used for supplying indices to vertex shaders
 	unsigned int dummyVAO;
@@ -138,7 +141,6 @@ int main() {
 		//RENDER SHADOW MAP
 		glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO.fbo);
 		glViewport(0, 0, shadowFBO.width, shadowFBO.height);
-		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_DEPTH_BUFFER_BIT);
 		shadowCamera.target = glm::vec3(0);
 		shadowCamera.position = normalize(-mainLight.direction) * shadowSettings.camDistance;
@@ -178,7 +180,6 @@ int main() {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		glBindTextureUnit(0, framebuffer.colorBuffers[0]);
-		//glBindTextureUnit(0, shadowFBO.depthBuffer);
 		postProcessShader.use();
 		glBindVertexArray(dummyVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -217,8 +218,8 @@ void drawUI() {
 		if (ImGui::CollapsingHeader("Shadows")) {
 			ImGui::DragFloat("Shadow cam distance", &shadowSettings.camDistance);
 			ImGui::DragFloat("Shadow cam size", &shadowCamera.orthoHeight);
-			ImGui::DragFloat("Shadow min bias", &shadowSettings.minBias);
-			ImGui::DragFloat("Shadow max bias", &shadowSettings.maxBias);
+			ImGui::DragFloat("Shadow min bias", &shadowSettings.minBias, 0.01f);
+			ImGui::DragFloat("Shadow max bias", &shadowSettings.maxBias, 0.01f);
 		}
 	}
 	ImGui::End();
