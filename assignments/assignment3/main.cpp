@@ -52,7 +52,7 @@ struct PointLight {
 	glm::vec3 color = glm::vec3(1.0f);
 };
 PointLight pointLights[MAX_POINT_LIGHTS];
-int numPointLights = MAX_POINT_LIGHTS;
+int numPointLights = 64;
 
 bool postProcessEnabled;
 
@@ -89,6 +89,13 @@ struct InstancedLightData {
 	glm::vec3 color;
 }instancedLightData[MAX_POINT_LIGHTS];
 
+enum RenderPath {
+	Forward,
+	Deferred
+};
+const char* renderPaths[2] = { "Forward", "Deferred" };
+int renderPathIndex = 0;
+
 void drawScene(ew::Camera& camera, ew::Shader& shader) {
 	shader.use();
 	shader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
@@ -122,13 +129,13 @@ int main() {
 	goldColorTexture = ew::loadTexture("assets/textures/gold_color.png", true);
 	goldNormalTexture = ew::loadTexture("assets/textures/gold_normal.png");
 
-	ew::Shader litShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
 	ew::Shader depthOnlyShader = ew::Shader("assets/depthOnly.vert", "assets/depthOnly.frag");
 	ew::Shader postProcessShader = ew::Shader("assets/fsTriangle.vert", "assets/tonemapping.frag");
 	ew::Shader gBufferShader = ew::Shader("assets/gBufferPass.vert", "assets/gBufferPass.frag");
 	ew::Shader deferredShader = ew::Shader("assets/fsTriangle.vert", "assets/deferredShading.frag");
 	ew::Shader emissiveShader = ew::Shader("assets/instancedLightOrb.vert", "assets/instancedLightOrb.frag");
 	ew::Shader deferredLightVolume = ew::Shader("assets/deferredLightVolume.vert", "assets/deferredLightVolume.frag");
+	ew::Shader litShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
 
 	//Load models
 	monkeyModel = ew::Model("assets/Suzanne.obj");
@@ -233,105 +240,151 @@ int main() {
 		glNamedBufferData(lightInstanceVBO, sizeof(instancedLightData), &instancedLightData[0], GL_DYNAMIC_DRAW);
 
 		glDisable(GL_BLEND);
-		//RENDER SHADOW MAP
-		glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO.fbo);
-		glViewport(0, 0, shadowFBO.width, shadowFBO.height);
-		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-		glClear(GL_DEPTH_BUFFER_BIT);
-
-		shadowCamera.position = shadowCamera.target - (glm::normalize(mainLight.direction) * shadowSettings.camDistance);
-		glCullFace(GL_FRONT);
-		drawScene(shadowCamera,depthOnlyShader);
-
-		//RENDER TO GBUFFER
-		glBindFramebuffer(GL_FRAMEBUFFER, gBuffer.fbo);
-		glViewport(0, 0, gBuffer.width, gBuffer.height);
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glCullFace(GL_BACK);
-		drawScene(mainCamera, gBufferShader);
-
-		//Render light volumes to light buffer
+		//RENDER MAIN LIGHT SHADOW MAP
 		{
-			glBindFramebuffer(GL_FRAMEBUFFER, lightVolumeBuffer.fbo);
-			glViewport(0, 0, lightVolumeBuffer.width, lightVolumeBuffer.height);
-			glClearColor(0, 0, 0, 1.0);
-			glClear(GL_COLOR_BUFFER_BIT);
+			glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO.fbo);
+			glViewport(0, 0, shadowFBO.width, shadowFBO.height);
+			glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+			glClear(GL_DEPTH_BUFFER_BIT);
 
-			deferredLightVolume.use();
-
-			//Bind textures
-			glBindTextureUnit(0, gBuffer.colorBuffers[0]);
-			glBindTextureUnit(1, gBuffer.colorBuffers[1]);
-			
-			deferredLightVolume.setMat4("_ViewProjection", mainCamera.projectionMatrix() * mainCamera.viewMatrix());
-			deferredLightVolume.setFloat("_Material.Ka", material.Ka);
-			deferredLightVolume.setFloat("_Material.Kd", material.Kd);
-			deferredLightVolume.setFloat("_Material.Ks", material.Ks);
-			deferredLightVolume.setFloat("_Material.Shininess", material.Shininess);
-			deferredLightVolume.setVec3("_EyePos", mainCamera.position);
-			deferredLightVolume.setVec2("_ScreenSize", lightVolumeBuffer.width, lightVolumeBuffer.height);
-
-			//Additive blending
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_ONE, GL_ONE);
+			shadowCamera.position = shadowCamera.target - (glm::normalize(mainLight.direction) * shadowSettings.camDistance);
 			glCullFace(GL_FRONT);
-			glDepthMask(GL_FALSE);
-
-			sphereMesh.drawInstanced(ew::DrawMode::TRIANGLES, numPointLights);
-
-			glDisable(GL_BLEND);
+			drawScene(shadowCamera, depthOnlyShader);
 			glCullFace(GL_BACK);
-			glDepthMask(GL_TRUE);
 		}
 
-		
-
-		//Deferred shading 
-		//Lighting done in screenspace
-		{
+		if (renderPathIndex == RenderPath::Forward) {
 			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
 			glViewport(0, 0, framebuffer.width, framebuffer.height);
 			glClearColor(0, 0, 0, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-			//Bind textures
-			glBindTextureUnit(0, gBuffer.colorBuffers[0]);
-			glBindTextureUnit(1, gBuffer.colorBuffers[1]);
-			glBindTextureUnit(2, gBuffer.colorBuffers[2]);
+			litShader.use();
+			litShader.setFloat("_Material.Ka", material.Ka);
+			litShader.setFloat("_Material.Kd", material.Kd);
+			litShader.setFloat("_Material.Ks", material.Ks);
+			litShader.setFloat("_Material.Shininess", material.Shininess);
+			litShader.setVec3("_EyePos", mainCamera.position);
+			litShader.setVec3("_MainLight.color", mainLight.color);
+			litShader.setVec3("_MainLight.direction", mainLight.direction);
+			litShader.setFloat("_MinBias", shadowSettings.minBias);
+			litShader.setFloat("_MaxBias", shadowSettings.maxBias);
+			litShader.setMat4("_LightTransform", shadowCamera.projectionMatrix() * shadowCamera.viewMatrix());
+
+			litShader.setInt("_MainTex", 0);
+			litShader.setInt("_NormalMap", 1);
 			glBindTextureUnit(3, shadowFBO.depthBuffer);
-			glBindTextureUnit(4, lightVolumeBuffer.colorBuffers[0]);
+			litShader.setInt("_ShadowMap", 3);
 
-			deferredShader.use();
-			deferredShader.setFloat("_Material.Ka", material.Ka);
-			deferredShader.setFloat("_Material.Kd", material.Kd);
-			deferredShader.setFloat("_Material.Ks", material.Ks);
-			deferredShader.setFloat("_Material.Shininess", material.Shininess);
-			deferredShader.setVec3("_EyePos", mainCamera.position);
-			deferredShader.setVec3("_MainLight.color", mainLight.color);
-			deferredShader.setVec3("_MainLight.direction", mainLight.direction);
-			deferredShader.setFloat("_MinBias", shadowSettings.minBias);
-			deferredShader.setFloat("_MaxBias", shadowSettings.maxBias);
-			deferredShader.setMat4("_LightTransform", shadowCamera.projectionMatrix() * shadowCamera.viewMatrix());
-
-			glBindVertexArray(dummyVAO);
-			glDrawArrays(GL_TRIANGLES, 0, 3);
+			litShader.setInt("_NumPointLights", numPointLights);
+			for (size_t i = 0; i < numPointLights; i++)
+			{
+				std::string prefix = "_PointLights[" + std::to_string(i) + "].";
+				litShader.setFloat(prefix + "radius", pointLights[i].radius);
+				litShader.setVec3(prefix + "color", pointLights[i].color);
+				litShader.setVec3(prefix + "position", pointLights[i].position);
+			}
+			drawScene(mainCamera, litShader);
+			//Instanced render light sources
+			{
+				emissiveShader.use();
+				emissiveShader.setMat4("_ViewProjection", mainCamera.projectionMatrix() * mainCamera.viewMatrix());
+				sphereMesh.drawInstanced(ew::DrawMode::TRIANGLES, numPointLights);
+			}
 		}
+		else if (renderPathIndex == RenderPath::Deferred) {
+			//RENDER TO GBUFFER
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, gBuffer.fbo);
+				glViewport(0, 0, gBuffer.width, gBuffer.height);
+				glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+				
+				drawScene(mainCamera, gBufferShader);
+			}
 
-		//Blit gbuffer depth to HDR buffer for forward pass
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, gBuffer.fbo);
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer.fbo); // write to default framebuffer
-		glBlitFramebuffer(
-			0, 0, screenWidth, screenHeight, 0, 0, screenWidth, screenHeight, GL_DEPTH_BUFFER_BIT, GL_NEAREST
-		);
-		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
+			//Render light volumes to light buffer
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, lightVolumeBuffer.fbo);
+				glViewport(0, 0, lightVolumeBuffer.width, lightVolumeBuffer.height);
+				glClearColor(0, 0, 0, 1.0);
+				glClear(GL_COLOR_BUFFER_BIT);
 
-		//Forward render light sources
-		{
-			emissiveShader.use();
-			emissiveShader.setMat4("_ViewProjection", mainCamera.projectionMatrix() * mainCamera.viewMatrix());
-			sphereMesh.drawInstanced(ew::DrawMode::TRIANGLES, numPointLights);
+				deferredLightVolume.use();
+
+				//Bind textures
+				glBindTextureUnit(0, gBuffer.colorBuffers[0]);
+				glBindTextureUnit(1, gBuffer.colorBuffers[1]);
+
+				deferredLightVolume.setMat4("_ViewProjection", mainCamera.projectionMatrix() * mainCamera.viewMatrix());
+				deferredLightVolume.setFloat("_Material.Ka", material.Ka);
+				deferredLightVolume.setFloat("_Material.Kd", material.Kd);
+				deferredLightVolume.setFloat("_Material.Ks", material.Ks);
+				deferredLightVolume.setFloat("_Material.Shininess", material.Shininess);
+				deferredLightVolume.setVec3("_EyePos", mainCamera.position);
+				deferredLightVolume.setVec2("_ScreenSize", lightVolumeBuffer.width, lightVolumeBuffer.height);
+
+				//Additive blending
+				glEnable(GL_BLEND);
+				glBlendFunc(GL_ONE, GL_ONE);
+				glCullFace(GL_FRONT);
+				glDepthMask(GL_FALSE);
+
+				sphereMesh.drawInstanced(ew::DrawMode::TRIANGLES, numPointLights);
+
+				glDisable(GL_BLEND);
+				glCullFace(GL_BACK);
+				glDepthMask(GL_TRUE);
+			}
+
+
+			//Deferred shading 
+			//Lighting done in screenspace
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
+				glViewport(0, 0, framebuffer.width, framebuffer.height);
+				glClearColor(0, 0, 0, 1.0f);
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+				//Bind textures
+				glBindTextureUnit(0, gBuffer.colorBuffers[0]);
+				glBindTextureUnit(1, gBuffer.colorBuffers[1]);
+				glBindTextureUnit(2, gBuffer.colorBuffers[2]);
+				glBindTextureUnit(3, shadowFBO.depthBuffer);
+				glBindTextureUnit(4, lightVolumeBuffer.colorBuffers[0]);
+
+				deferredShader.use();
+				deferredShader.setFloat("_Material.Ka", material.Ka);
+				deferredShader.setFloat("_Material.Kd", material.Kd);
+				deferredShader.setFloat("_Material.Ks", material.Ks);
+				deferredShader.setFloat("_Material.Shininess", material.Shininess);
+				deferredShader.setVec3("_EyePos", mainCamera.position);
+				deferredShader.setVec3("_MainLight.color", mainLight.color);
+				deferredShader.setVec3("_MainLight.direction", mainLight.direction);
+				deferredShader.setFloat("_MinBias", shadowSettings.minBias);
+				deferredShader.setFloat("_MaxBias", shadowSettings.maxBias);
+				deferredShader.setMat4("_LightTransform", shadowCamera.projectionMatrix() * shadowCamera.viewMatrix());
+
+				glBindVertexArray(dummyVAO);
+				glDrawArrays(GL_TRIANGLES, 0, 3);
+			}
+
+			//Blit gbuffer depth to HDR buffer for forward pass
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, gBuffer.fbo);
+			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer.fbo); // write to default framebuffer
+			glBlitFramebuffer(
+				0, 0, screenWidth, screenHeight, 0, 0, screenWidth, screenHeight, GL_DEPTH_BUFFER_BIT, GL_NEAREST
+			);
+			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
+
+			//Forward render light sources
+			{
+				emissiveShader.use();
+				emissiveShader.setMat4("_ViewProjection", mainCamera.projectionMatrix() * mainCamera.viewMatrix());
+				sphereMesh.drawInstanced(ew::DrawMode::TRIANGLES, numPointLights);
+			}
 		}
+		
 
 		//Draw to screen w/ post processing
 		{
@@ -341,7 +394,6 @@ int main() {
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 			glBindTextureUnit(0, framebuffer.colorBuffers[0]);
-			//glBindTextureUnit(0, shadowFBO.depthBuffer);
 			postProcessShader.use();
 			glBindVertexArray(dummyVAO);
 			glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -393,6 +445,7 @@ void drawUI() {
 			ImGui::DragFloat("Shadow min bias", &shadowSettings.minBias);
 			ImGui::DragFloat("Shadow max bias", &shadowSettings.maxBias);
 		}
+		ImGui::Combo("Render Path", &renderPathIndex, renderPaths, IM_ARRAYSIZE(renderPaths));
 	}
 	ImGui::End();
 
