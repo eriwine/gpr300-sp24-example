@@ -81,6 +81,7 @@ struct ShadowSettings {
 	float minBias = 0.005f;
 	float maxBias = 0.01f;
 }shadowSettings;
+const int SHADOW_RESOLUTION = 1024;
 
 //Instanced point light colors
 struct InstancedLightData {
@@ -132,7 +133,7 @@ int main() {
 	//Load models
 	monkeyModel = ew::Model("assets/Suzanne.obj");
 	planeMesh = ew::Mesh(ew::createPlane(40, 40, 1));
-	sphereMesh = ew::Mesh(ew::createSphere(1.0f, 16));
+	sphereMesh = ew::Mesh(ew::createSphere(1.0f, 8));
 	planeTransform.position.y = -1.25;
 
 	glEnable(GL_CULL_FACE);
@@ -155,7 +156,7 @@ int main() {
 	//Initialize framebuffers
 	framebuffer = ew::createFramebuffer(screenWidth, screenHeight, GL_RGBA16F);
 	lightVolumeBuffer = ew::createFramebufferColorOnly(screenWidth, screenHeight, GL_RGB16F);
-	shadowFBO = ew::createDepthOnlyFramebuffer(512, 512);
+	shadowFBO = ew::createDepthOnlyFramebuffer(SHADOW_RESOLUTION, SHADOW_RESOLUTION);
 	gBuffer = ew::createGBuffers(screenWidth, screenHeight);
 
 	//Used for supplying indices to vertex shaders
