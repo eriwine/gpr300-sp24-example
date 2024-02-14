@@ -10,5 +10,5 @@ vec4 vertices[3] = {
 
 void main(){
 	UV = vertices[gl_VertexID].zw;
-	gl_Position = vec4(vertices[gl_VertexID].xy,0,1);
+	gl_Position = vec4(vertices[gl_VertexID].xy,0.9999,1);
 }

@@ -33,7 +33,7 @@ uniform float _MinBias = 0.005;
 uniform float _MaxBias = 0.015;
 
 //Contains added secondary colors
-uniform layout(binding = 4) sampler2D _PointLightBuffer;
+//uniform layout(binding = 4) sampler2D _PointLightBuffer;
 
 //Returns 0 in shadow, 1 out of shadow
 float calcShadow(vec4 lightSpacePos, vec3 normal, vec3 toLight){
@@ -81,7 +81,7 @@ void main(){
 	lightColor*=calcShadow(lightSpacePos,normal,toLight);
 
 	//Add secondary lights
-	lightColor += texture(_PointLightBuffer,UV).rgb;
+	//lightColor += texture(_PointLightBuffer,UV).rgb;
 
 	//Add ambient
 	lightColor+=_AmbientColor * _Material.Ka;
