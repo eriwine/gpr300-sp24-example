@@ -14,6 +14,8 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#include <ew/animation.h>
+
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 GLFWwindow* initWindow(const char* title, int width, int height);
 void drawUI();
@@ -34,8 +36,33 @@ struct Material {
 	float Shininess = 128;
 }material;
 
+void debugLogAnimData(const ew::AnimationClip& clip) {
+	printf("Num bones: %d\n", (int)clip.bones.size());
+	for (size_t i = 0; i < clip.bones.size(); i++)
+	{
+		const ew::BoneAnimation& bone = clip.bones[i];
+		printf("Bone %d\n", (int)i);
+		for (size_t j = 0; j < bone.positionKeyFrames.size(); j++)
+		{
+			const ew::Vec3KeyFrame posKey = bone.positionKeyFrames[j];
+			printf("   Pos key %d: v = {%f,%f,%f}, t = %f\n", (int)j, posKey.value.x, posKey.value.y, posKey.value.z, posKey.time);
+		}
+		for (size_t j = 0; j < bone.rotationKeyFrames.size(); j++)
+		{
+			const ew::QuatKeyFrame rotKey = bone.rotationKeyFrames[j];
+			printf("   Rot key %d: v = {%f,%f,%f,%f}, t = %f\n", (int)j, rotKey.value.x, rotKey.value.y, rotKey.value.z, rotKey.value.w, rotKey.time);
+		}
+		for (size_t j = 0; j < bone.scaleKeyFrames.size(); j++)
+		{
+			const ew::Vec3KeyFrame rotKey = bone.scaleKeyFrames[j];
+			printf("   Scale key %d: v = {%f,%f,%f}, t = %f\n", (int)j, rotKey.value.x, rotKey.value.y, rotKey.value.z, rotKey.time);
+		}
+	}
+}
 
 int main() {
+
+	
 	GLFWwindow* window = initWindow("Assignment 0", screenWidth, screenHeight);
 	GLuint stoneColorTexture = ew::loadTexture("assets/stones_color.png");
 	GLuint stoneNormalTexture = ew::loadTexture("assets/stones_normal.png");
@@ -52,6 +79,10 @@ int main() {
 	camera.fov = 60.0f; //Vertical field of view, in degrees
 
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
+
+
+	ew::AnimationClip walkAnim = ew::loadAnimationFromFile("assets/Walking.fbx");
+	//debugLogAnimData(walkAnim);
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
