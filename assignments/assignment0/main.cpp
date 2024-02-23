@@ -60,6 +60,9 @@ void debugLogAnimData(const ew::AnimationClip& clip) {
 	}
 }
 
+ew::AnimatedSkeletonPackage animPackage;
+float animationTime = 0;
+
 int main() {
 
 	
@@ -80,9 +83,11 @@ int main() {
 
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
-
-	ew::AnimationClip walkAnim = ew::loadAnimationFromFile("assets/Walking.fbx");
+	animPackage = ew::loadAnimationFromFile("assets/Walking.dae");
 	//debugLogAnimData(walkAnim);
+	std::vector<glm::mat4> boneWorldMatrices;
+
+	ew::solveFK(animPackage.skeleton, boneWorldMatrices);
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
@@ -114,8 +119,17 @@ int main() {
 		monkeyModel.draw(); //Draws monkey model using current shader
 		cameraController.move(window, &camera, deltaTime);
 		monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
+		
+		//Draw skeleton made of monkeys 
+		for (size_t i = 0; i < boneWorldMatrices.size(); i++)
+		{
+			shader.setMat4("_Model", boneWorldMatrices[i]);
+			monkeyModel.draw();
+		}
+		
 		drawUI();
 
+		
 
 		glfwSwapBuffers(window);
 	}
@@ -143,6 +157,9 @@ void drawUI() {
 		ImGui::SliderFloat("Shininess", &material.Shininess, 2.0f, 1024.0f);
 	}
 
+	if (ImGui::SliderFloat("Animation time", &animationTime, 0.0f, animPackage.animationClip.duration)) {
+		ew::updateSkeleton(&animPackage.skeleton,&animPackage.animationClip, animationTime);
+	}
 	ImGui::End();
 
 	ImGui::Render();

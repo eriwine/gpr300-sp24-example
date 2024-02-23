@@ -3,6 +3,7 @@
 #include <glm/gtx/quaternion.hpp>
 
 #include <vector>
+#include <string>
 
 namespace ew {
 	struct Vec3KeyFrame {
@@ -14,6 +15,7 @@ namespace ew {
 		float time;
 	};
 	struct BoneAnimation {
+		std::string name;
 		std::vector<Vec3KeyFrame> positionKeyFrames;
 		std::vector<QuatKeyFrame> rotationKeyFrames;
 		std::vector<Vec3KeyFrame> scaleKeyFrames;
@@ -24,12 +26,20 @@ namespace ew {
 		std::vector<BoneAnimation> bones;
 	};
 	struct Bone {
-		glm::mat4 inverseBindPose; //Model space -> bone space in bind pose
-		glm::mat4 localTransform; //Transform relative to parent
+		std::string name;
 		int parentIndex;
+		glm::mat4 inverseBindPose; //Model space -> bone space in bind pose
+		glm::mat4 localTransform; //Transform relative to parent in bind pose
 	};
 	struct Skeleton {
 		std::vector<Bone> bones;
 	};
-	AnimationClip loadAnimationFromFile(const char* filePath);
+	struct AnimatedSkeletonPackage {
+		Skeleton skeleton;
+		AnimationClip animationClip;
+	};
+	AnimatedSkeletonPackage loadAnimationFromFile(const char* filePath);
+
+	void solveFK(const ew::Skeleton& skeleton, std::vector<glm::mat4>& worldMatrices);
+	void updateSkeleton(ew::Skeleton* skeleton, ew::AnimationClip* animClip, float time);
 }

@@ -17,12 +17,12 @@ namespace ew {
 		return key;
 	}
 	glm::mat4 convertMat4(const aiMatrix4x4& aiMat) {
-		return glm::mat4(
+		return glm::transpose(glm::mat4(
 			aiMat.a1, aiMat.a2, aiMat.a3, aiMat.a4,
 			aiMat.b1, aiMat.b2, aiMat.b3, aiMat.b4,
 			aiMat.c1, aiMat.c2, aiMat.c3, aiMat.c4,
 			aiMat.d1, aiMat.d2, aiMat.d3, aiMat.d4
-			);
+		));
 	}
 	BoneAnimation loadBoneAnimation(const aiNodeAnim* aiNodeAnim) {
 		BoneAnimation boneAnim;
@@ -55,37 +55,74 @@ namespace ew {
 				boneAnim.scaleKeyFrames.emplace_back(convertVec3Key(aiNodeAnim->mScalingKeys[i]));
 			}
 		}
+		boneAnim.name = std::string(aiNodeAnim->mNodeName.C_Str());
 		return boneAnim;
 	}
+	void loadSkeletonRecursive(aiNode* node, Skeleton* skeleton) {
+		if (node->mNumMeshes == 0) {
+			Bone bone;
+			bone.name = std::string(node->mName.C_Str());
+			bone.localTransform = convertMat4(node->mTransformation);
+			skeleton->bones.push_back(bone);
+		}
+		for (size_t i = 0; i < node->mNumChildren; i++)
+		{
+			//if no meshes, assume this is just a bone
+			loadSkeletonRecursive(node->mChildren[i], skeleton);
+		}
+	}
+	
 	Skeleton loadSkeleton(const aiMesh* aiMesh) {
 		Skeleton skeleton;
 		if (!aiMesh->HasBones()) {
 			printf("Mesh has no bones\n");
 			return skeleton;
 		}
-		for (size_t i = 0; i < aiMesh->mNumBones; i++)
+		
+		unsigned int numBones = aiMesh->mNumBones;
+
+		//Keep sorted list of nodes to find parent indices
+		std::vector<aiNode*> nodeList;
+		nodeList.reserve(numBones);
+		for (size_t i = 0; i < numBones; i++)
+		{
+			nodeList.push_back(aiMesh->mBones[i]->mNode);
+		}
+		for (size_t i = 0; i < numBones; i++)
 		{
 			const aiBone* aiBone = aiMesh->mBones[i];
 			Bone bone;
 			bone.inverseBindPose = convertMat4(aiBone->mOffsetMatrix);
+			bone.localTransform = convertMat4(aiBone->mNode->mTransformation);
+			//parentIndex is index in sorted list
+			bone.parentIndex = std::distance(nodeList.begin(), std::find(nodeList.begin(), nodeList.end(), aiBone->mNode->mParent));
+			if (bone.parentIndex == nodeList.size()) {
+				bone.parentIndex = -1;
+			}
+			skeleton.bones.push_back(bone);
 		}
 		
 		return skeleton;
 	}
 	//Loads a single animation from file
-	AnimationClip loadAnimationFromFile(const char* filePath)
+	AnimatedSkeletonPackage loadAnimationFromFile(const char* filePath)
 	{
+		AnimatedSkeletonPackage package;
+
 		AnimationClip animClip;
 
+		//Load scene from file.
+		//Contains animations AND skeleton (armature)
 		Assimp::Importer importer;
 		const aiScene* aiScene = importer.ReadFile(filePath, aiProcess_PopulateArmatureData);
+
 		if (aiScene == NULL) {
 			printf("Failed to load file %s", filePath);
-			return animClip;
+			return package;
 		}
 		if (!aiScene->HasAnimations()) {
 			printf("File does not contain animations %s", filePath);
-			return animClip;
+			return package;
 		}
 		//Get first animation clip
 		aiAnimation* aiAnim = aiScene->mAnimations[0];
@@ -98,10 +135,72 @@ namespace ew {
 		animClip.duration = aiAnim->mDuration;
 		animClip.ticksPerSecond = aiAnim->mTicksPerSecond;
 
-		if (aiScene->HasMeshes()) {
-			Skeleton skeleton = loadSkeleton(aiScene->mMeshes[0]);
-		}
+		/*if (aiScene->HasMeshes()) {
+			package.skeleton = loadSkeleton(aiScene->mMeshes[0]);
+		}*/
+		loadSkeletonRecursive(aiScene->mMeshes[0]->mBones[0]->mArmature, &package.skeleton);
+		package.animationClip = animClip;
+		return package;
+	}
+
+	void solveFK(const ew::Skeleton& skeleton, std::vector<glm::mat4>& worldMatrices) {
+		const size_t numBones = skeleton.bones.size();
+
+		worldMatrices.reserve(numBones);
+		worldMatrices.clear();
 		
-		return animClip;
+		for (size_t i = 0; i < numBones; i++)
+		{
+			const ew::Bone& thisBone = skeleton.bones[i];
+			if (thisBone.parentIndex == -1) {
+				worldMatrices.emplace_back(thisBone.localTransform);
+				continue;
+			}
+			const ew::Bone& parentBone = skeleton.bones[thisBone.parentIndex];
+			worldMatrices.emplace_back(worldMatrices[thisBone.parentIndex] * thisBone.localTransform);
+		}
+		return;
+	}
+
+	glm::vec3 lerp(const glm::vec3& x, const glm::vec3& y, float t) {
+		return x * (1.f - t) + y * t;
+	}
+
+	glm::vec3 lerpVec3KeyFrames(const std::vector<ew::Vec3KeyFrame>& keyFrames, float time) {
+		//Interpolate Positions
+		ew::Vec3KeyFrame prevKeyFrame, nextKeyFrame;
+
+		//Find 2 keyframes to interpolate between
+		const size_t numKeyFrames = keyFrames.size();
+		for (size_t i = 0; i < numKeyFrames; i++)
+		{
+			if (keyFrames[i].time < time) {
+				prevKeyFrame = keyFrames[i];
+				//Loop around if beyond last keyframe
+				nextKeyFrame = (i < numKeyFrames) ? keyFrames[i + 1] : keyFrames[0];
+				break;
+			}
+		}
+		//Inverse lerp to get t = (0-1)
+		float t = (time - prevKeyFrame.time) / (nextKeyFrame.time - prevKeyFrame.time);
+		//Lerp to get value
+		return ew::lerp(prevKeyFrame.value, nextKeyFrame.value, t);
+	}
+
+	void updateSkeleton(ew::Skeleton* skeleton, ew::AnimationClip* animClip, float time) {
+		for (size_t i = 0; i < animClip->bones.size(); i++)
+		{
+			const BoneAnimation& boneAnim = animClip->bones[i];
+
+			glm::vec3 interpolatedPos = lerpVec3KeyFrames(boneAnim.positionKeyFrames, time);
+
+			glm::mat4 translation = glm::translate(glm::mat4(1), interpolatedPos);
+
+			//Interpolate Rotation
+
+			//Interpolate 
+
+			skeleton->bones[i].localTransform = translation;
+		}
 	}
 }
