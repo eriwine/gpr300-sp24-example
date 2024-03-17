@@ -58,44 +58,42 @@ namespace ew {
 		boneAnim.name = std::string(aiNodeAnim->mNodeName.C_Str());
 		return boneAnim;
 	}
-	void loadSkeletonRecursive(aiNode* node, Skeleton* skeleton) {
-		if (node->mNumMeshes == 0) {
-			Bone bone;
-			bone.name = std::string(node->mName.C_Str());
-			bone.localTransform = convertMat4(node->mTransformation);
-			skeleton->bones.push_back(bone);
+
+	/// <summary>
+	/// Recursively populates boneList in order
+	/// </summary>
+	/// <param name="node"></param>
+	/// <param name="boneList"></param>
+	void loadAssimpSkeletonRecursive(aiNode* node, std::vector<aiNode*>* boneList) {
+		//Skip nodes with meshes
+		//We are only looking for the armature
+		if (node->mNumMeshes == 0)
+		{
+			boneList->push_back(node);
 		}
 		for (size_t i = 0; i < node->mNumChildren; i++)
 		{
 			//if no meshes, assume this is just a bone
-			loadSkeletonRecursive(node->mChildren[i], skeleton);
+			loadAssimpSkeletonRecursive(node->mChildren[i], boneList);
 		}
 	}
-	
-	Skeleton loadSkeleton(const aiMesh* aiMesh) {
-		Skeleton skeleton;
-		if (!aiMesh->HasBones()) {
-			printf("Mesh has no bones\n");
-			return skeleton;
-		}
-		
-		unsigned int numBones = aiMesh->mNumBones;
 
-		//Keep sorted list of nodes to find parent indices
+	Skeleton loadSkeleton(aiNode* rootNode) {
+		Skeleton skeleton;
 		std::vector<aiNode*> nodeList;
-		nodeList.reserve(numBones);
+		loadAssimpSkeletonRecursive(rootNode, &nodeList);
+		//Keep sorted list of nodes to find parent indices
+		size_t numBones = nodeList.size();
 		for (size_t i = 0; i < numBones; i++)
 		{
-			nodeList.push_back(aiMesh->mBones[i]->mNode);
-		}
-		for (size_t i = 0; i < numBones; i++)
-		{
-			const aiBone* aiBone = aiMesh->mBones[i];
+		//	const aiBone* aiBone = aiMesh->mBones[i];
+			aiNode* node = nodeList[i];
 			Bone bone;
-			bone.inverseBindPose = convertMat4(aiBone->mOffsetMatrix);
-			bone.localTransform = convertMat4(aiBone->mNode->mTransformation);
+			bone.name = node->mName.C_Str();
+			//bone.inverseBindPose = convertMat4(aiBone->mOffsetMatrix);
+			bone.localTransform = convertMat4(node->mTransformation);
 			//parentIndex is index in sorted list
-			bone.parentIndex = std::distance(nodeList.begin(), std::find(nodeList.begin(), nodeList.end(), aiBone->mNode->mParent));
+			bone.parentIndex = std::distance(nodeList.begin(), std::find(nodeList.begin(), nodeList.end(), node->mParent));
 			if (bone.parentIndex == nodeList.size()) {
 				bone.parentIndex = -1;
 			}
@@ -135,10 +133,7 @@ namespace ew {
 		animClip.duration = aiAnim->mDuration;
 		animClip.ticksPerSecond = aiAnim->mTicksPerSecond;
 
-		/*if (aiScene->HasMeshes()) {
-			package.skeleton = loadSkeleton(aiScene->mMeshes[0]);
-		}*/
-		loadSkeletonRecursive(aiScene->mMeshes[0]->mBones[0]->mArmature, &package.skeleton);
+		package.skeleton = loadSkeleton(aiScene->mRootNode);
 		package.animationClip = animClip;
 		return package;
 	}

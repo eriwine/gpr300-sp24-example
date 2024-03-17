@@ -92,9 +92,13 @@ int main() {
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
+		//UPDATE
 		float time = (float)glfwGetTime();
 		deltaTime = time - prevFrameTime;
 		prevFrameTime = time;
+
+		cameraController.move(window, &camera, deltaTime);
+		//monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
 
 		//RENDER
 		glClearColor(0.6f,0.8f,0.92f,1.0f);
@@ -116,10 +120,8 @@ int main() {
 		shader.setMat4("_Model", glm::mat4(1.0f));
 		shader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
 		shader.setMat4("_Model", monkeyTransform.modelMatrix());
-		monkeyModel.draw(); //Draws monkey model using current shader
-		cameraController.move(window, &camera, deltaTime);
-		monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
-		
+	//	monkeyModel.draw(); //Draws monkey model using current shader
+
 		//Draw skeleton made of monkeys 
 		for (size_t i = 0; i < boneWorldMatrices.size(); i++)
 		{
