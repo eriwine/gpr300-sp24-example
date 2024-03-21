@@ -98,6 +98,11 @@ int main() {
 		prevFrameTime = time;
 
 		cameraController.move(window, &camera, deltaTime);
+
+		//Loop normalized time (0-1s)
+	 	animationTime = glm::fract(time);
+		ew::updateSkeleton(&animPackage.skeleton, &animPackage.animationClip, animationTime);
+		ew::solveFK(animPackage.skeleton, boneWorldMatrices);
 		//monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
 
 		//RENDER
@@ -159,9 +164,10 @@ void drawUI() {
 		ImGui::SliderFloat("Shininess", &material.Shininess, 2.0f, 1024.0f);
 	}
 
-	if (ImGui::SliderFloat("Animation time", &animationTime, 0.0f, animPackage.animationClip.duration)) {
+	/*if (ImGui::SliderFloat("Animation time", &animationTime, 0.0f, animPackage.animationClip.duration)) {
 		ew::updateSkeleton(&animPackage.skeleton,&animPackage.animationClip, animationTime);
-	}
+	}*/
+	ImGui::SliderFloat("Animation time", &animationTime, 0.0f, 1.0f);
 	ImGui::End();
 
 	ImGui::Render();

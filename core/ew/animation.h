@@ -6,14 +6,16 @@
 #include <string>
 
 namespace ew {
-	struct Vec3KeyFrame {
-		glm::vec3 value;
+	template <typename T>
+	struct KeyFrame {
+		T value;
 		float time;
 	};
-	struct QuatKeyFrame {
-		glm::quat value;
-		float time;
+	struct Vec3KeyFrame : KeyFrame<glm::vec3>{
 	};
+	struct QuatKeyFrame : KeyFrame<glm::quat> {
+	};
+
 	struct BoneAnimation {
 		std::string name;
 		std::vector<Vec3KeyFrame> positionKeyFrames;
@@ -42,4 +44,6 @@ namespace ew {
 
 	void solveFK(const ew::Skeleton& skeleton, std::vector<glm::mat4>& worldMatrices);
 	void updateSkeleton(ew::Skeleton* skeleton, ew::AnimationClip* animClip, float time);
+
+	
 }

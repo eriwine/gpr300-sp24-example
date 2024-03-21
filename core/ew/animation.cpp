@@ -157,45 +157,81 @@ namespace ew {
 		return;
 	}
 
-	glm::vec3 lerp(const glm::vec3& x, const glm::vec3& y, float t) {
+	inline glm::vec3 lerp(const glm::vec3& x, const glm::vec3& y, float t) {
 		return x * (1.f - t) + y * t;
 	}
-
+	inline float lerp(float x, float y, float t) {
+		return x * (1.f - t) + y * t; 
+	}
+	inline float inverseLerp(float x, float y, float v) {
+		return  (v - x) / (y - x);
+	}
 	glm::vec3 lerpVec3KeyFrames(const std::vector<ew::Vec3KeyFrame>& keyFrames, float time) {
 		//Interpolate Positions
 		ew::Vec3KeyFrame prevKeyFrame, nextKeyFrame;
-
-		//Find 2 keyframes to interpolate between
 		const size_t numKeyFrames = keyFrames.size();
 		for (size_t i = 0; i < numKeyFrames; i++)
 		{
-			if (keyFrames[i].time < time) {
-				prevKeyFrame = keyFrames[i];
-				//Loop around if beyond last keyframe
-				nextKeyFrame = (i < numKeyFrames) ? keyFrames[i + 1] : keyFrames[0];
+			if (keyFrames[i].time >= time) {
+				nextKeyFrame = keyFrames[i];
+				//Loop if this is first keyframe
+				prevKeyFrame = i > 0 ? keyFrames[i - 1] : keyFrames[numKeyFrames - 1];
 				break;
 			}
 		}
 		//Inverse lerp to get t = (0-1)
-		float t = (time - prevKeyFrame.time) / (nextKeyFrame.time - prevKeyFrame.time);
+		float t = ew::inverseLerp(prevKeyFrame.time, nextKeyFrame.time, time);
 		//Lerp to get value
 		return ew::lerp(prevKeyFrame.value, nextKeyFrame.value, t);
 	}
 
-	void updateSkeleton(ew::Skeleton* skeleton, ew::AnimationClip* animClip, float time) {
+	glm::quat lerpQuatKeyFrames(const std::vector<ew::QuatKeyFrame>& keyFrames, float time) {
+		//Interpolate Positions
+		ew::QuatKeyFrame prevKeyFrame, nextKeyFrame;
+		const size_t numKeyFrames = keyFrames.size();
+		for (size_t i = 0; i < numKeyFrames; i++)
+		{
+			if (keyFrames[i].time >= time) {
+				nextKeyFrame = keyFrames[i];
+				//Loop if this is first keyframe
+				prevKeyFrame = i > 0 ? keyFrames[i - 1] : keyFrames[numKeyFrames - 1];
+				break;
+			}
+		}
+		//Inverse lerp to get t = (0-1)
+		float t = ew::inverseLerp(prevKeyFrame.time, nextKeyFrame.time, time);
+		//Lerp to get value
+		return glm::slerp(prevKeyFrame.value, nextKeyFrame.value, t);
+	}
+	
+	ew::Bone* findBone(ew::Skeleton* skeleton, const std::string& name) {
+		const size_t numBones = skeleton->bones.size();
+		for (size_t i = 0; i < numBones; i++)
+		{
+			if (skeleton->bones[i].name == name)
+				return &skeleton->bones.data()[i];
+		}
+	}
+	void updateSkeleton(ew::Skeleton* skeleton, ew::AnimationClip* animClip, float normalizedTime) {
+		float time = ew::lerp(0, animClip->duration, glm::clamp<float>(normalizedTime,0,1));
 		for (size_t i = 0; i < animClip->bones.size(); i++)
 		{
 			const BoneAnimation& boneAnim = animClip->bones[i];
 
+			//Translation
 			glm::vec3 interpolatedPos = lerpVec3KeyFrames(boneAnim.positionKeyFrames, time);
-
 			glm::mat4 translation = glm::translate(glm::mat4(1), interpolatedPos);
 
-			//Interpolate Rotation
+			//Rotation
+			glm::quat interpolatedRot = lerpQuatKeyFrames(boneAnim.rotationKeyFrames, time);
+			glm::mat4 rotation = glm::toMat4(interpolatedRot);
+			
+			//TODO: Scale
+			glm::vec3 interpolatedScale = lerpVec3KeyFrames(boneAnim.scaleKeyFrames, time);
+			glm::mat4 scale = glm::scale(glm::mat4(1),interpolatedScale);
 
-			//Interpolate 
-
-			skeleton->bones[i].localTransform = translation;
+			Bone* bone = findBone(skeleton, boneAnim.name);
+			bone->localTransform = translation * rotation * scale;
 		}
 	}
 }
