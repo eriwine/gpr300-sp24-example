@@ -227,6 +227,7 @@ int main() {
 
 	//Load models
 	monkeyModel = ew::Model("assets/Suzanne.obj");
+	//ew::Model characterModel = ew::Model("assets/Su")
 	planeMesh = ew::Mesh(ew::createPlane(10, 10, 1));
 
 	planeTransform.position = glm::vec3(-5, -2, -5);

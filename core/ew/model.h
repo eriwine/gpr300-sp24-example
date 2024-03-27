@@ -6,8 +6,12 @@
 #include "mesh.h"
 #include "shader.h"
 #include <vector>
+#include <map>
 
 namespace ew {
+	struct BoneInfo {
+		glm::mat4 invBindPose;
+	};
 	class Model {
 	public:
 		Model();
@@ -15,5 +19,6 @@ namespace ew {
 		void draw();
 	private:
 		std::vector<ew::Mesh> m_meshes;
+		std::map<std::string, ew::BoneInfo> m_boneInfoMap;
 	};
 }

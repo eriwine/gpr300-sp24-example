@@ -11,6 +11,7 @@
 
 namespace ew {
 	ew::Mesh processAiMesh(aiMesh* aiMesh);
+
 	Model::Model() {
 
 	}

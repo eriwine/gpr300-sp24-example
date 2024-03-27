@@ -62,6 +62,7 @@ void debugLogAnimData(const ew::AnimationClip& clip) {
 
 ew::AnimatedSkeletonPackage animPackage;
 float animationTime = 0;
+float animationSpeed = 1.0f;
 
 int main() {
 
@@ -72,7 +73,7 @@ int main() {
 
 	ew::Shader shader = ew::Shader("assets/lit.vert", "assets/lit.frag");
 	ew::Model monkeyModel = ew::Model("assets/Suzanne.obj");
-	
+	ew::Model characterModel = ew::Model("assets/Walking.dae");
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK); //Back face culling
 	glEnable(GL_DEPTH_TEST); //Depth testing
@@ -100,7 +101,7 @@ int main() {
 		cameraController.move(window, &camera, deltaTime);
 
 		//Loop normalized time (0-1s)
-	 	animationTime = glm::fract(time);
+	 	animationTime = glm::fract(time * animationSpeed);
 		ew::updateSkeleton(&animPackage.skeleton, &animPackage.animationClip, animationTime);
 		ew::solveFK(animPackage.skeleton, boneWorldMatrices);
 		//monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
@@ -167,7 +168,8 @@ void drawUI() {
 	/*if (ImGui::SliderFloat("Animation time", &animationTime, 0.0f, animPackage.animationClip.duration)) {
 		ew::updateSkeleton(&animPackage.skeleton,&animPackage.animationClip, animationTime);
 	}*/
-	ImGui::SliderFloat("Animation time", &animationTime, 0.0f, 1.0f);
+	ImGui::SliderFloat("Animation Time", &animationTime, 0.0f, 1.0f);
+	ImGui::DragFloat("Animaiton Speed", &animationSpeed, 0.05f);
 	ImGui::End();
 
 	ImGui::Render();

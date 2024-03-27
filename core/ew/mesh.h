@@ -7,11 +7,14 @@
 #include <vector>
 
 namespace ew {
+#define MAX_BONE_WEIGHTS 4
 	struct Vertex {
 		glm::vec3 pos;
 		glm::vec3 normal;
 		glm::vec2 uv;
 		glm::vec3 tangent;
+		unsigned short boneIDs[MAX_BONE_WEIGHTS];
+		float boneWeights[MAX_BONE_WEIGHTS];
 	};
 
 	struct MeshData {
