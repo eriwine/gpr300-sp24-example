@@ -69,8 +69,18 @@ const int SHADOW_RESOLUTION = 512;
 
 namespace ew {
 	struct Joint {
-		std::string m_name;
-		int m_parentID;
+		std::string m_name = "Joint0";
+		int m_parentID = -1;
+		glm::vec3 position = glm::vec3(0);
+		glm::quat rotation = glm::quat(1, 0, 0, 0);
+		glm::vec3 scale = glm::vec3(1);
+		glm::mat4 localTransform() const {
+			glm::mat4 m = glm::mat4(1.0f);
+			m = glm::translate(m, position);
+			m *= glm::mat4_cast(rotation);
+			m = glm::scale(m, scale);
+			return m;
+		}
 	};
 	struct Skeleton {
 		std::vector<Joint> m_joints;
@@ -146,14 +156,18 @@ namespace ew {
 	}
 }
 
-void drawScene(ew::Camera& camera, ew::Shader& shader) {
+void drawScene(ew::Camera& camera, ew::Shader& shader, const std::vector<glm::mat4>& globalTransforms) {
 	shader.use();
 	shader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
 
 	glBindTextureUnit(0, goldColorTexture);
 	glBindTextureUnit(1, goldNormalTexture);
-	shader.setMat4("_Model", monkeyTransform.modelMatrix());
-	monkeyModel.draw();
+
+	for (size_t i = 0; i < globalTransforms.size(); i++)
+	{
+		shader.setMat4("_Model", globalTransforms[i]);
+		monkeyModel.draw();
+	}
 
 	glBindTextureUnit(0, stoneColorTexture);
 	glBindTextureUnit(1, stoneNormalTexture);
@@ -230,6 +244,51 @@ int main() {
 	animator->m_animClip = animClip;
 	animator->m_transform = &monkeyTransform;
 
+	ew::Skeleton skeleton;
+	{
+		ew::Joint torso = ew::Joint();
+		ew::Joint head = ew::Joint();
+		head.position = glm::vec3(0, 1.5f, 0);
+		head.scale = glm::vec3(0.5);
+		head.m_parentID = 0;
+		ew::Joint shoulder_R = ew::Joint();
+		shoulder_R.position = glm::vec3(1, 0, 0);
+		shoulder_R.scale = glm::vec3(0.5);
+		shoulder_R.rotation = glm::quatLookAt(glm::vec3(-1, 0, 0), glm::vec3(0, 1, 0));
+		shoulder_R.m_parentID = 0;
+		ew::Joint shoulder_L = ew::Joint();
+		shoulder_L.position = glm::vec3(-1, 0, 0);
+		shoulder_L.scale = glm::vec3(0.5);
+		shoulder_L.rotation = glm::quatLookAt(glm::vec3(1, 0, 0), glm::vec3(0, 1, 0));
+		shoulder_L.m_parentID = 0;
+		ew::Joint elbow_R = ew::Joint();
+		elbow_R.position = glm::vec3(0, 0, 2);
+		elbow_R.scale = glm::vec3(0.75f);
+		elbow_R.m_parentID = 2;//shoulder_R
+		ew::Joint elbow_L = ew::Joint();
+		elbow_L.position = glm::vec3(0, 0, 2);
+		elbow_L.m_parentID = 3;//shoulder_L
+		elbow_L.scale = glm::vec3(0.75f);
+		ew::Joint wrist_R = ew::Joint();
+		wrist_R.position = glm::vec3(0, 3, 0);
+		wrist_R.scale = glm::vec3(0.75f);
+		wrist_R.m_parentID = 4;//elbow_R
+		ew::Joint wrist_L = ew::Joint();
+		wrist_L.position = glm::vec3(0, 3, 0);
+		wrist_L.scale = glm::vec3(0.75f);
+		wrist_L.m_parentID = 5;//elbow_L
+		skeleton.m_joints.push_back(torso);
+		skeleton.m_joints.push_back(head);
+		skeleton.m_joints.push_back(shoulder_R);
+		skeleton.m_joints.push_back(shoulder_L);
+		skeleton.m_joints.push_back(elbow_R);
+		skeleton.m_joints.push_back(elbow_L);
+		skeleton.m_joints.push_back(wrist_R);
+		skeleton.m_joints.push_back(wrist_L);
+
+	}
+	
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
@@ -239,7 +298,36 @@ int main() {
 
 		cameraController.move(window, &mainCamera, deltaTime);
 
-		ew::updateAnimator(animator, deltaTime);
+		//ew::updateAnimator(animator, deltaTime);
+
+		//Animate Suzanne Mech
+		float torsoAngle = sinf(time);
+		glm::vec3 orbitPos = glm::vec3(cosf(time) * 2.0f, 0, sinf(time) * 2.0f);
+		//skeleton.m_joints[0].rotation = glm::quat(glm::vec3(0, torsoAngle, 0));
+		skeleton.m_joints[0].position = glm::vec3(cosf(time) * 2.0f, sinf(time * 2.0f) * 0.2f, sinf(time) * 2.0f);
+		glm::vec3 facingDir = glm::cross(-glm::normalize(orbitPos), glm::vec3(0, 1, 0));
+		skeleton.m_joints[0].rotation = glm::quatLookAtRH(facingDir, glm::vec3(0, 1, 0));
+		skeleton.m_joints[1].position.y = 1.5f + sinf(time * 16.0f) * 0.1f;
+		skeleton.m_joints[2].rotation = glm::rotate(skeleton.m_joints[2].rotation, 2.0f * deltaTime, glm::vec3(0.0, 0.0, 1.0));
+		skeleton.m_joints[3].rotation = glm::rotate(skeleton.m_joints[3].rotation, 2.0f * deltaTime, glm::vec3(0.0, 0.0, 1.0));
+		skeleton.m_joints[6].rotation = glm::rotate(skeleton.m_joints[6].rotation, 3.0f * deltaTime, glm::vec3(0.0, 1.0, 0.0));
+		skeleton.m_joints[7].rotation = glm::rotate(skeleton.m_joints[7].rotation, 3.0f * deltaTime, glm::vec3(0.0, 1.0, 0.0));
+
+		//SOLVE FK
+		const size_t numJoints = skeleton.m_joints.size();
+		std::vector<glm::mat4> globalTransforms = std::vector<glm::mat4>();
+		globalTransforms.reserve(numJoints);
+		for (int i = 0; i < numJoints; i++) {
+			ew::Joint& joint = skeleton.m_joints[i];
+			if (joint.m_parentID == -1) {
+				globalTransforms.push_back(joint.localTransform());
+			}
+			else {
+				glm::mat4& parentTransform = globalTransforms[joint.m_parentID];
+				globalTransforms.push_back(parentTransform * joint.localTransform());
+			}
+		}
+
 		//Spin the monkey
 		//monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
 
@@ -250,7 +338,7 @@ int main() {
 		shadowCamera.target = glm::vec3(0);
 		shadowCamera.position = normalize(-mainLight.direction) * shadowSettings.camDistance;
 		glCullFace(GL_FRONT);
-		drawScene(shadowCamera,depthOnlyShader);
+		drawScene(shadowCamera,depthOnlyShader,globalTransforms);
 
 		//RENDER SCENE TO HDR BUFFER
 		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
@@ -276,7 +364,7 @@ int main() {
 		litShader.setFloat("_MaxBias", shadowSettings.maxBias);
 		litShader.setMat4("_LightTransform", shadowCamera.projectionMatrix() * shadowCamera.viewMatrix());
 
-		drawScene(mainCamera,litShader);
+		drawScene(mainCamera,litShader, globalTransforms);
 
 		//Draw to screen
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
