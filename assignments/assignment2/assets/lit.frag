@@ -43,6 +43,7 @@ uniform SpotLight _SpotLight;
 uniform sampler2D _ShadowMap;
 uniform float _MinBias = 0.005; 
 uniform float _MaxBias = 0.015;
+uniform int _PCFSize = 1;
 
 #define GOOD_SHADOWS
 
@@ -56,6 +57,9 @@ float calcShadow(sampler2D shadowMap, vec3 normal, vec3 toLight, vec4 lightSpace
 
 	//This fragment's depth from POV of the light source
 	float myDepth = lightSpacePos.z;
+	if (myDepth >= 1){
+		return 1;
+	}
 
 #ifdef GOOD_SHADOWS
 	//Slope scale bias
@@ -65,13 +69,15 @@ float calcShadow(sampler2D shadowMap, vec3 normal, vec3 toLight, vec4 lightSpace
 	//PCF
 	float totalShadow = 0;
 	vec2 texelOffset = 1.0 /  textureSize(shadowMap,0);
-	for(int y = -1; y <=1; y++){
-		for(int x = -1; x <=1; x++){
+	int halfWidth = int(_PCFSize);
+	for(int y = -halfWidth; y <=halfWidth; y++){
+		for(int x = -halfWidth; x <=halfWidth; x++){
 			vec2 uv = lightSpacePos.xy + vec2(x * texelOffset.x, y * texelOffset.y);
 			totalShadow+=step(myDepth,texture(shadowMap,uv).r);
 		}
 	}
-	totalShadow/=9.0;
+	float totalSamples = pow(halfWidth * 2 + 1,2);
+	totalShadow/=totalSamples;
 	return totalShadow;
 #else
 	return step(myDepth,texture(shadowMap,lightSpacePos.xy).r);
@@ -115,8 +121,8 @@ void main(){
 	normal = fs_in.TBN * normal;
 	normal = normalize(normal);
 
-	vec3 lightColor = calcLight(normal, -normalize(_MainLight.direction), _MainLight.color, _ShadowMap, fs_in.LightSpacePos);
-	lightColor += calcSpotLight(_SpotLight,normal);
+	vec3 lightColor = calcLight(normal, _MainLight.color, -normalize(_MainLight.direction), _ShadowMap, fs_in.LightSpacePos);
+	//lightColor += calcSpotLight(_SpotLight,normal);
 	lightColor+=_AmbientColor * _Material.Ka;
 	vec3 objectColor = texture(_MainTex,fs_in.TexCoord).rgb;
 

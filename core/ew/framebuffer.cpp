@@ -8,7 +8,7 @@ namespace ew {
 		Framebuffer framebuffer;
 		framebuffer.width = width;
 		framebuffer.height = height;
-
+		framebuffer.colorFormat = colorFormat;
 		glCreateFramebuffers(1, &framebuffer.fbo);
 		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
 
@@ -19,7 +19,7 @@ namespace ew {
 
 		glGenTextures(1, &framebuffer.depthBuffer);
 		glBindTexture(GL_TEXTURE_2D, framebuffer.depthBuffer);
-		glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT16, width, height);
+		glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT24, width, height);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, framebuffer.depthBuffer, 0);
 
 		GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
@@ -63,7 +63,8 @@ namespace ew {
 
 		glGenTextures(1, &framebuffer.depthBuffer);
 		glBindTexture(GL_TEXTURE_2D, framebuffer.depthBuffer);
-		glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT16, width, height);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+		//glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT24, width, height);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);

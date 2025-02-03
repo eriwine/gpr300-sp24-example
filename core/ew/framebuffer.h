@@ -6,6 +6,7 @@ namespace ew {
 		unsigned int depthBuffer;
 		unsigned int width;
 		unsigned int height;
+		unsigned int colorFormat;
 	};
 	Framebuffer createFramebuffer(unsigned int width, unsigned int height, int colorFormat);
 	Framebuffer createFramebufferColorOnly(unsigned int width, unsigned int height, int colorFormat);

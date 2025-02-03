@@ -25,8 +25,8 @@ ew::Camera mainCamera;
 
 
 //Global state
-int screenWidth = 1080;
-int screenHeight = 720;
+int screenWidth = 1680;
+int screenHeight = 1050;
 float prevFrameTime;
 float deltaTime;
 struct Material {
@@ -43,7 +43,8 @@ struct Light {
 
 bool postProcessEnabled;
 
-ew::Transform monkeyTransform;
+unsigned const int MONKEY_COUNT = 4;
+ew::Transform monkeyTransforms[MONKEY_COUNT];
 ew::Transform planeTransform;
 
 //Assets
@@ -63,9 +64,10 @@ struct ShadowSettings {
 	float camDistance = 10.0f;
 	float minBias = 0.005f;
 	float maxBias = 0.01f;
+	int pcfSize = 1;
+	int shadowMapResolution = 1024;
+	bool drawFrustum = false;
 }shadowSettings;
-
-const int SHADOW_RESOLUTION = 512;
 
 void drawScene(ew::Camera& camera, ew::Shader& shader) {
 	shader.use();
@@ -73,13 +75,73 @@ void drawScene(ew::Camera& camera, ew::Shader& shader) {
 
 	glBindTextureUnit(0, goldColorTexture);
 	glBindTextureUnit(1, goldNormalTexture);
-	shader.setMat4("_Model", monkeyTransform.modelMatrix());
-	monkeyModel.draw();
+
+	for (int i = 0; i < MONKEY_COUNT; i++) {
+		shader.setMat4("_Model", monkeyTransforms[i].modelMatrix());
+		monkeyModel.draw();
+	}
+
+	//glBindTextureUnit(0, goldColorTexture);
+	//glBindTextureUnit(1, goldNormalTexture);
+	//shader.setMat4("_Model", monkeyTransform.modelMatrix());
+	//monkeyModel.draw();
 
 	glBindTextureUnit(0, stoneColorTexture);
 	glBindTextureUnit(1, stoneNormalTexture);
 	shader.setMat4("_Model", planeTransform.modelMatrix());
 	planeMesh.draw();
+}
+
+/// <summary>
+/// A cube mesh designed to be drawn with GL_LINES
+/// </summary>
+/// <returns></returns>
+unsigned int createCubeLinesVAO(){
+	glm::vec3 v[8] = {
+		glm::vec3(-1,-1,1),
+		glm::vec3(1,-1,1),
+		glm::vec3(1,1,1),
+		glm::vec3(-1,1,1),
+		glm::vec3(-1,-1,-1),
+		glm::vec3(1,-1,-1),
+		glm::vec3(1,1,-1),
+		glm::vec3(-1,1,-1)
+	};
+	GLushort i[24] = {
+		0,1,1,2,2,3,3,0,
+		4,5,5,6,6,7,7,4,
+		4,0,1,5,6,2,3,7
+	}; 
+	unsigned int m_vao = 0;
+	unsigned int m_vbo = 0;
+	unsigned int m_ebo = 0;
+	glGenVertexArrays(1, &m_vao);
+	glBindVertexArray(m_vao);
+	glGenBuffers(1, &m_vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(v), &v[0], GL_STATIC_DRAW);
+	glGenBuffers(1, &m_ebo);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i),&i[0], GL_STATIC_DRAW);
+
+	//Position attribute
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (const void*)0);
+	glEnableVertexAttribArray(0);
+
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	return m_vao;
+}
+
+void resizeShadowFBO(ew::Framebuffer* framebuffer, int width, int height) {
+
+	framebuffer->width = width;
+	framebuffer->height = height;
+	glBindTexture(GL_TEXTURE_2D, framebuffer->depthBuffer);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	//glTextureStorage2D(framebuffer->depthBuffer, 1, GL_DEPTH_COMPONENT24, width, height);
+	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 int main() {
@@ -94,11 +156,16 @@ int main() {
 	ew::Shader litShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
 	ew::Shader depthOnlyShader = ew::Shader("assets/depthOnly.vert", "assets/depthOnly.frag");
 	ew::Shader postProcessShader = ew::Shader("assets/fsTriangle.vert", "assets/tonemapping.frag");
+	ew::Shader debugShader = ew::Shader("assets/debugFrustum.vert", "assets/debugFrustum.frag");
 
 	//Load models
 	monkeyModel = ew::Model("assets/Suzanne.obj");
 	planeMesh = ew::Mesh(ew::createPlane(10, 10, 1));
 
+	for (size_t i = 0; i < MONKEY_COUNT; i++)
+	{
+		monkeyTransforms[i].position = glm::vec3(-1.5f + (i % 2) * 3.0f, 0.0, -1.5 + (i / 2) * 3.0f);
+	}
 	planeTransform.position = glm::vec3(-5, -2, -5);
 
 	glEnable(GL_CULL_FACE);
@@ -113,18 +180,20 @@ int main() {
 
 	//Orthographic shadow camera for directional light
 	shadowCamera.aspectRatio = 1;
-	shadowCamera.farPlane = 50;
+	shadowCamera.farPlane = 50.0;
 	shadowCamera.nearPlane = 1.0;
 	shadowCamera.orthoHeight = 10.0f;
 	shadowCamera.orthographic = true;
-
 	//Initialize framebuffers
 	framebuffer = ew::createFramebuffer(screenWidth, screenHeight, GL_RGBA16F);
-	shadowFBO = ew::createDepthOnlyFramebuffer(SHADOW_RESOLUTION, SHADOW_RESOLUTION);
+	shadowFBO = ew::createDepthOnlyFramebuffer(shadowSettings.shadowMapResolution, shadowSettings.shadowMapResolution);
 
 	//Used for supplying indices to vertex shaders
 	unsigned int dummyVAO;
 	glCreateVertexArrays(1, &dummyVAO);
+
+	unsigned int wireCubeVAO = createCubeLinesVAO();
+	glLineWidth(3);
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
@@ -136,7 +205,9 @@ int main() {
 		cameraController.move(window, &mainCamera, deltaTime);
 
 		//Spin the monkey
-		monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
+		for (int i = 0; i < 4; i++) {
+			monkeyTransforms[i].rotation = glm::rotate(monkeyTransforms[i].rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
+		}
 
 		//RENDER SHADOW MAP
 		glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO.fbo);
@@ -144,6 +215,7 @@ int main() {
 		glClear(GL_DEPTH_BUFFER_BIT);
 		shadowCamera.target = glm::vec3(0);
 		shadowCamera.position = normalize(-mainLight.direction) * shadowSettings.camDistance;
+
 		glCullFace(GL_FRONT);
 		drawScene(shadowCamera,depthOnlyShader);
 
@@ -169,9 +241,18 @@ int main() {
 		litShader.setVec3("_MainLight.direction", mainLight.direction);
 		litShader.setFloat("_MinBias", shadowSettings.minBias);
 		litShader.setFloat("_MaxBias", shadowSettings.maxBias);
+		litShader.setInt("_PCFSize", shadowSettings.pcfSize);
 		litShader.setMat4("_LightTransform", shadowCamera.projectionMatrix() * shadowCamera.viewMatrix());
 
 		drawScene(mainCamera,litShader);
+
+		if (shadowSettings.drawFrustum) {
+			debugShader.use();
+			debugShader.setMat4("_FrustumInvProj", glm::inverse(shadowCamera.projectionMatrix() * shadowCamera.viewMatrix()));
+			debugShader.setMat4("_ViewProjection", mainCamera.projectionMatrix() * mainCamera.viewMatrix());
+			glBindVertexArray(wireCubeVAO);
+			glDrawElements(GL_LINES, 24, GL_UNSIGNED_SHORT, 0);
+		}
 
 		//Draw to screen
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -216,10 +297,26 @@ void drawUI() {
 			ImGui::SliderFloat3("Direction", &mainLight.direction.x, -1.0f, 1.0f);
 		}
 		if (ImGui::CollapsingHeader("Shadows")) {
-			ImGui::DragFloat("Shadow cam distance", &shadowSettings.camDistance);
-			ImGui::DragFloat("Shadow cam size", &shadowCamera.orthoHeight);
-			ImGui::DragFloat("Shadow min bias", &shadowSettings.minBias, 0.01f);
-			ImGui::DragFloat("Shadow max bias", &shadowSettings.maxBias, 0.01f);
+			ImGui::DragFloat("Min bias", &shadowSettings.minBias, 0.005f);
+			ImGui::DragFloat("Max bias", &shadowSettings.maxBias, 0.005f);
+			ImGui::SliderInt("PCF Size", &shadowSettings.pcfSize, 0, 5);
+			if (ImGui::SliderInt("Shadow Map Resolution", &shadowSettings.shadowMapResolution, 8, 2048)) {
+				resizeShadowFBO(&shadowFBO, shadowSettings.shadowMapResolution, shadowSettings.shadowMapResolution);
+			}
+			ImGui::Indent(16.0f);
+			if (ImGui::CollapsingHeader("Camera")) {
+				ImGui::Checkbox("Debug draw frustum", &shadowSettings.drawFrustum);
+				ImGui::Checkbox("Orthographic", &shadowCamera.orthographic);
+				if (shadowCamera.orthographic) {
+					ImGui::DragFloat("Size", &shadowCamera.orthoHeight);
+				}
+				else {
+					ImGui::DragFloat("FOV", &shadowCamera.fov, 1.0f);
+				}
+				ImGui::DragFloat("Distance to target", &shadowSettings.camDistance);
+				ImGui::DragFloat("Far plane", &shadowCamera.farPlane);
+			}
+			
 		}
 	}
 	ImGui::End();
